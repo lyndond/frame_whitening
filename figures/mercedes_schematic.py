@@ -13,7 +13,7 @@ C, _ = fw.randcov2()
 W = fw.get_mercedes_frame(jitter=True)
 
 with sns.plotting_context("paper"):
-    fig, ax = plt.subplots(1, 1)
+    fig_frame, ax = plt.subplots(1, 1, dpi=100)
     ax.hlines(0, -2, 2, "grey")
     ax.vlines(0, -2, 2, "grey")
     fwplt.plot_ellipse(C, linewidth=3, ax=ax, color="k")
@@ -31,9 +31,10 @@ with sns.plotting_context("paper"):
     ax.set(xlabel="y0", ylabel="y1", xticks=[], yticks=[])
 
     plt.legend()
-    fig.tight_layout
+    fig_frame.tight_layout()
     sns.despine()
 
+fig_frame.savefig("figures/frame_schematic.png", transparent=True, bbox_inches="tight")
 
 #%% simulate
 def simulate(Lxx, W, batch_size=64, n_batch=1024, lr_g=5e-3, g0=None, seed=None):

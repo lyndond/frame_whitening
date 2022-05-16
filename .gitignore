@@ -8,6 +8,7 @@ __pycache__/
 
 *.png
 *.pdf
+!assets/*.png
 
 # Distribution / packaging
 .Python
