@@ -2,6 +2,13 @@ import numpy as np
 from scipy.linalg import fractional_matrix_power
 from typing import Tuple
 import matplotlib.pyplot as plt
+from tqdm import trange
+
+
+def normalize_frame(W: np.ndarray, axis: int = 0) -> np.ndarray:
+    """Normalize the columns of W to unit length"""
+    W0 = W / np.linalg.norm(W, axis=axis, keepdims=True)
+    return W0
 
 
 def compute_g_opt(C: np.ndarray, W: np.ndarray) -> np.ndarray:
@@ -31,7 +38,7 @@ def parsevalize(W: np.ndarray) -> np.ndarray:
     """Ellipsoidal Parseval transformation of arbitrary frame"""
     S = W @ W.T
     S12 = fractional_matrix_power(S, -.5)
-    R2 = S12 @ R  # turn parseval
+    R2 = S12 @ W  # turn parseval
     return R2
 
 
