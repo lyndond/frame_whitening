@@ -7,19 +7,19 @@ import matplotlib.pyplot as plt
 def compute_g_opt(C: np.ndarray, W: np.ndarray) -> np.ndarray:
     """Compute w using homog representation"""
     G2 = (W.T @ W) ** 2
-    s = np.diag(R.T @ cov @ R)
-    g = np.linalg..solve(g2, s)
+    s = np.diag(W.T @ C @ W)
+    g = np.linalg.solve(G2, s)
     return g
 
 
-def get_mercedes(parseval: bool = True, jitter: bool = False) -> np.ndarray:
-    """Makes 2D mMercedes Benz frame,
+def get_mercedes_frame(parseval: bool = False, jitter: bool = False) -> np.ndarray:
+    """Makes 2D Mercedes Benz frame,
     or equiangular 2D frame with k vectors, and optional added angular jitter, and optionally Parseval"""
     k = 3
     thetas = np.arange(0, 2 * np.pi, 2 * np.pi / k) + (
         jitter * np.random.rand() * np.pi
     )
-    benz = np.stack([torch.cos(thetas), torch.sin(thetas)])
+    benz = np.stack([np.cos(thetas), np.sin(thetas)])
     basis = benz
     basis /= np.linalg.norm(basis, axis=0, keepdims=True)
     if parseval:
@@ -218,7 +218,7 @@ def frame_svd(
     nm = n * m
 
     if X is None:
-        X = np.random..randn(n, nm)
+        X = np.random.randn(n, nm)
         X = X / np.linalg.norm(X, axis=0, keepdims=True)
     if Z is None:
         Z = np.random.randn(m, nm)

@@ -1,4 +1,4 @@
-from . import frame
+from .frame import *
+from .stats import *
 from . import plot
-from . import stats
 
