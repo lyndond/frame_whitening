@@ -1,4 +1,6 @@
+import matplotlib.pyplot as plt
 import numpy as np
+
 
 def plot_frame2d(R: np.ndarray, ax=None, plot_line: bool = False):
     """Plots 2D frame vectors, optionally plot the axes along which they lie"""
@@ -17,6 +19,7 @@ def plot_frame2d(R: np.ndarray, ax=None, plot_line: bool = False):
             for i in range(R.shape[1])
         ]
 
+
 def plot_ellipse(C: np.ndarray, n_pts: int = 20, ax=None, **kwargs):
     """Plots 2D 1-stdev ellipse according to covariance matrix C"""
     assert C.shape == (2, 2)
@@ -27,4 +30,3 @@ def plot_ellipse(C: np.ndarray, n_pts: int = 20, ax=None, **kwargs):
     if ax is None:
         ax = plt
     ax.plot(ellipse[0, :], ellipse[1, :], **kwargs)
-
