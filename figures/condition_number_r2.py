@@ -62,3 +62,6 @@ ax[1].set(
 )
 fig.tight_layout()
 sns.despine()
+
+#%%
+fig.save_fig("figures/cond_number_r2.png", transparent=True, bbox_inches="tight")
