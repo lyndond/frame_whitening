@@ -1,2 +1,2 @@
-# frame_whitening
+# Frame whitening
 Overcomplete adaptive gain whitening
