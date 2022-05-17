@@ -37,14 +37,14 @@ def get_mercedes_frame(parseval: bool = False, jitter: bool = False) -> np.ndarr
 def parsevalize(W: np.ndarray) -> np.ndarray:
     """Ellipsoidal Parseval transformation of arbitrary frame"""
     S = W @ W.T
-    S12 = fractional_matrix_power(S, -.5)
+    S12 = fractional_matrix_power(S, -0.5)
     R2 = S12 @ W  # turn parseval
     return R2
 
 
 def squared_gram(W: np.ndarray) -> np.ndarray:
     gram = W.T @ W
-    return gram ** 2
+    return gram**2
 
 
 def frame_distance(W: np.ndarray, C1: np.ndarray, C2: np.ndarray) -> np.ndarray:
@@ -67,18 +67,16 @@ def get_equiangular_3d() -> np.ndarray:
     Redmond Existence and construction of real-valued equiangular tight frames (2009) PhD Thesis
     """
 
-    return (
-        np.array(
-            [
-                [1, 0, 0],
-                [1 / np.sqrt(5), 2 / np.sqrt(5), 0],
-                [1 / np.sqrt(5), 0.1 * (5 - np.sqrt(5)), np.sqrt(0.1 * (5 + np.sqrt(5)))],
-                [1 / np.sqrt(5), 0.1 * (5 - np.sqrt(5)), -np.sqrt(0.1 * (5 + np.sqrt(5)))],
-                [1 / np.sqrt(5), 0.1 * (-5 - np.sqrt(5)), np.sqrt(0.1 * (5 - np.sqrt(5)))],
-                [1 / np.sqrt(5), 0.1 * (-5 - np.sqrt(5)), -np.sqrt(0.1 * (5 - np.sqrt(5)))],
-            ]
-        ).T
-    )  # / np.sqrt(2)
+    return np.array(
+        [
+            [1, 0, 0],
+            [1 / np.sqrt(5), 2 / np.sqrt(5), 0],
+            [1 / np.sqrt(5), 0.1 * (5 - np.sqrt(5)), np.sqrt(0.1 * (5 + np.sqrt(5)))],
+            [1 / np.sqrt(5), 0.1 * (5 - np.sqrt(5)), -np.sqrt(0.1 * (5 + np.sqrt(5)))],
+            [1 / np.sqrt(5), 0.1 * (-5 - np.sqrt(5)), np.sqrt(0.1 * (5 - np.sqrt(5)))],
+            [1 / np.sqrt(5), 0.1 * (-5 - np.sqrt(5)), -np.sqrt(0.1 * (5 - np.sqrt(5)))],
+        ]
+    ).T  # / np.sqrt(2)
 
 
 def get_rotation_matrix3d(alpha: float, beta: float, gamma: float):
@@ -104,9 +102,7 @@ def get_rotation_matrix3d(alpha: float, beta: float, gamma: float):
 
 
 def rot2(theta: float) -> np.ndarray:
-    return np.array(
-        [[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]]
-    )
+    return np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
 
 
 def get_near_etf(
@@ -192,7 +188,7 @@ def get_near_etf(
     # tighten the frame
     for _ in range(tight_iter):
         U, S, Vt = np.linalg.svd(R @ R.T)
-        R = np.sqrt(k / n) * (U @ np.diag(S ** -0.5) @ Vt) @ R
+        R = np.sqrt(k / n) * (U @ np.diag(S**-0.5) @ Vt) @ R
         R = R / np.linalg.norm(R, axis=0)
 
     if show:
@@ -240,12 +236,98 @@ def frame_svd(
 
     y = np.linalg.solve(XZ, s)
 
-    neg_ind = np.argwhere(y < torch.zeros(1))
+    neg_ind = np.argwhere(y < np.zeros(1))
 
     # ensure y is all positive by flipping sign of X
-    y = torch.abs(y)
+    y = np.abs(y)
     X[:, neg_ind] *= -1.0
 
     return X, y, Z
 
 
+def get_grassmanian(
+    n, m, niter=100, fract_shrink=0.8, shrink_fact=0.9, A_init=None, expand=False
+):
+    """Sample a tight frame with minimal mutual coherence, ie. the angle
+    between any pair of column is the same, and the smallest it can be.
+
+    Approximate iterative algorithm to sample grassmannian mtx (tightest frame,
+    smallest possible mutual coherence).
+
+    Parameters
+    ----------
+    n:
+        dimension of the ambient space
+    m:
+        number of vectors
+    niter:
+    fract_shrink:
+    shrink_fact:
+    A_init:
+
+    Returns
+    -------
+    W :
+        tight frame of shape [n, m], with normalized columns
+    G :
+        Gram matrix
+        G = A.T @ A
+        abs(Gij) = sqrt((m-n)/n(m-1))
+    Res :
+        'optimal mu', 'mean mu', 'obtained mu'
+
+    Notes
+    -----
+    From Pierre-Etienne Fiquet May 17 2022
+    """
+    assert m <= (np.minimum(n * (n + 1) / 2, (m - n) * (m - n + 1) / 2))
+
+    if A_init is None:
+        W = np.random.randn(n, m)
+    else:
+        assert (n, m) == A_init.shape
+        W = A_init
+
+    # normalize columns
+    W = normalize_frame(W)
+    G = W.T @ W
+    if m > n:
+        mu = np.sqrt((m - n) / n / (m - 1))
+
+    Res = np.zeros((niter, 3))
+    for i in range(niter):
+        # 1- shrink high inner products
+        gg = np.sort(np.abs(G).flatten())
+        idx, idy = np.where(
+            (np.abs(G) > gg[int(fract_shrink * (m**2 - m))]) & (np.abs(G - 1) > 1e-6)
+        )
+        G[idx, idy] *= shrink_fact
+
+        # 1b- expand near 0 products
+        if expand:
+            idx, idy = np.where(
+                (np.abs(G) < gg[int((1 - fract_shrink) * (m**2 - m))])
+            )
+            G[idx, idy] /= shrink_fact
+
+        # 2- reduce rank back to n
+        U, s, Vh = np.linalg.svd(G)
+        s[n:] *= 0
+        G = U @ np.diag(s) @ Vh
+
+        # 3- normalize cols
+        G = np.diag(1 / np.sqrt(np.diag(G))) @ G @ np.diag(1 / np.sqrt(np.diag(G)))
+
+        # status
+        gg = np.sort(np.abs(G).flatten())
+        idx, idy = np.where(
+            (np.abs(G) > gg[int(fract_shrink * (m**2 - m))]) & (np.abs(G - 1) > 1e-6)
+        )
+        GG = np.abs(G[idx, idy])
+        g_shape = GG.shape[0]
+        Res[i, :] = [mu, np.mean(GG), np.max(GG - np.eye(g_shape))]
+
+    U, s, Vh = np.linalg.svd(G)
+    W = np.diag(np.sqrt(s[:n])) @ U[:, :n].T
+    W = normalize_frame(W)
+    return W, G, Res

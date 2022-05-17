@@ -50,3 +50,28 @@ plt.colorbar(px)
 plt.colorbar(py)
 
 #%%
+
+
+
+
+
+#%%
+
+n = 10
+k = n * (n + 1) // 2
+print(k)
+W, G, res = design_grassmannian(
+    n,
+    k,
+    niter=500,
+    fract_shrink=0.8,
+    shrink_fact=0.9,
+)
+
+
+#%%
+
+plt.imshow(G, aspect="auto")
+plt.colorbar()
+#%%
+plt.plot(res)
