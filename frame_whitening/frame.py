@@ -215,7 +215,9 @@ def get_near_etf(
 def frame_svd(
     A: np.ndarray, X: np.ndarray = None, Z: np.ndarray = None
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
-    """Random decomposition of A into two frames and diagonal with all positive entries"""
+    """Random decomposition of A into two frames and diagonal with all positive entries
+    A = X @ diag(y) @ Z.T
+    """
 
     n, m = A.shape
     nm = n * m
@@ -230,7 +232,7 @@ def frame_svd(
     XX = X.T @ X
     ZZ = Z.T @ Z
 
-    XZ = XX * ZZ  # hadamard
+    XZ = XX * ZZ  # element-wise
 
     s = np.diag(X.T @ A @ Z)
 
@@ -280,7 +282,7 @@ def get_grassmanian(
     -----
     From Pierre-Etienne Fiquet May 17 2022
     """
-    assert m <= (np.minimum(n * (n + 1) / 2, (m - n) * (m - n + 1) / 2))
+    # assert m <= (np.minimum(n * (n + 1) // 2, (m - n) * (m - n + 1) // 2))
 
     if A_init is None:
         W = np.random.randn(n, m)
