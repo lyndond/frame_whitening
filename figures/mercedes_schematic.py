@@ -12,8 +12,8 @@ np.random.seed(69)
 C, _ = fw.randcov2()
 W = fw.get_mercedes_frame(jitter=True)
 
-with sns.plotting_context("paper"):
-    fig_frame, ax = plt.subplots(1, 1, dpi=100)
+with sns.plotting_context("paper", font_scale=1.5):
+    fig_frame, ax = plt.subplots(1, 1, dpi=300)
     ax.hlines(0, -2, 2, "grey")
     ax.vlines(0, -2, 2, "grey")
     fwplt.plot_ellipse(C, linewidth=3, ax=ax, color="k")
@@ -22,13 +22,18 @@ with sns.plotting_context("paper"):
     cols = sns.color_palette("husl", n_colors=3)
     for i in range(3):
         ax.plot(
-            x, (W[1, i] / W[0, i]) * x, "--", color=cols[i], linewidth=2, label=f"w{i}"
+            x,
+            (W[1, i] / W[0, i]) * x,
+            "--",
+            color=cols[i],
+            linewidth=2,
+            label=r"${\bf w}" + f"_{i}$",
         )
 
     fwplt.plot_frame2d(W, ax=ax)
     ax.axis("square")
     ax.axis((-2, 2, -2, 2))
-    ax.set(xlabel="y0", ylabel="y1", xticks=[], yticks=[])
+    ax.set(xlabel="$y_0$", ylabel="$y_1$", xticks=[], yticks=[])
 
     plt.legend()
     fig_frame.tight_layout()
@@ -128,7 +133,10 @@ errors = np.concatenate(all_errors)
 ## DYNAMICS
 with sns.plotting_context("paper", font_scale=2):
     fig_dynamics, ax = plt.subplots(2, 1, figsize=(12, 8), sharex="all", dpi=300)
-    [ax[0].plot(gs[:, i], label=f"g{i}", linewidth=2, color=cols[i]) for i in range(k)]
+    [
+        ax[0].plot(gs[:, i], label=r"$g_" + f"{i}$", linewidth=2, color=cols[i])
+        for i in range(k)
+    ]
 
     for i in range(num_switches):
         ax[0].hlines(
@@ -146,7 +154,7 @@ with sns.plotting_context("paper", font_scale=2):
     )
 
     ax[0].set(
-        ylabel="g",
+        ylabel=r"${\bf g}$",
         xlim=(0, num_switches * n_batch),
         ylim=(0, 1.5),
         yticks=np.arange(0, 1.4, 0.4),
@@ -157,8 +165,8 @@ with sns.plotting_context("paper", font_scale=2):
         ylim=(1e-3, 1e2),
         yscale="log",
         yticks=(1e-2, 1e0, 1e2),
-        xlabel="iter",
-        ylabel="$\parallel I - C_{yy}  \parallel_F^2$",
+        xlabel="Step",
+        ylabel=r"$\parallel {\bf I} - {\bf C}_{yy}  \parallel_F^2$",
     )
     sns.despine()
     ax[0].legend(loc="upper right")
@@ -183,11 +191,16 @@ with sns.plotting_context("paper", font_scale=2):
         ax[i, 0].set(title=f"$\kappa = $ {all_cond_x[i]:.2f}")
         ax[i, 1].set(title=f"$\kappa = $ {all_cond_y[i]:.2f}")
     ax[0, 0].set(
-        xlim=xlim, ylim=ylim, xlabel="x0", ylabel="x1", xticklabels=[], yticklabels=[]
+        xlim=xlim,
+        ylim=ylim,
+        xlabel="$x_0$",
+        ylabel="$x_1$",
+        xticklabels=[],
+        yticklabels=[],
     )
-    ax[0, 1].set(xlabel="y0", ylabel="y1")
-    ax[1, 0].set(xlabel="x0", ylabel="x1")
-    ax[1, 1].set(xlabel="y0", ylabel="y1")
+    ax[0, 1].set(xlabel="$y_0$", ylabel="$y_1$")
+    ax[1, 0].set(xlabel="$x_0$", ylabel="$x_1$")
+    ax[1, 1].set(xlabel="$y_0$", ylabel="$y_1$")
     sns.despine()
     fig_xy.tight_layout()
 
