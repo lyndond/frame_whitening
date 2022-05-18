@@ -247,7 +247,7 @@ def frame_svd(
     return X, y, Z
 
 
-def get_grassmanian(
+def get_grassmannian(
     n, m, niter=100, fract_shrink=0.8, shrink_fact=0.9, A_init=None, expand=False
 ):
     """Sample a tight frame with minimal mutual coherence, ie. the angle

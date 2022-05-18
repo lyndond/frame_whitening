@@ -25,8 +25,8 @@ def simulate_one(n, eta_g, n_batch, batch_size, frame):
     Cxx = V @ np.diag(s) @ V.T
     Lxx = np.linalg.cholesky(Cxx)
     kappa0 = np.linalg.cond(Cxx)
-    if frame == "GRASSMAN":
-        W, G, res = fw.get_grassmanian(n, k, niter=400)
+    if frame == "GRASSMANN":
+        W, G, res = fw.get_grassmannian(n, k, niter=400)
     elif frame == "RANDN":
         W = np.random.randn(n, k)
         W = fw.normalize_frame(W)
@@ -46,6 +46,12 @@ def simulate_one(n, eta_g, n_batch, batch_size, frame):
         error.append(err_sq)
     err = np.array(error) / n**2
 
+    X_test = fw.sample_x(Lxx, 4096)
+    Y_test = np.linalg.solve(W @ np.diag(g) @ W.T, X_test)
+    Cyy = np.cov(Y_test)
+    error_fro = (np.linalg.norm(Inn - Cyy) ** 2) / n**2
+    error_trace = (np.trace(Inn - Cyy)) / n
+    error_bures = fw.bures_dist(Inn, Cyy) ** 2
     df_sim = pd.DataFrame(
         [
             {
@@ -53,8 +59,12 @@ def simulate_one(n, eta_g, n_batch, batch_size, frame):
                 "k": k,
                 "n_batch": n_batch,
                 "batch_size": batch_size,
+                "eta_g": float(eta_g),
                 "kappa0": float(kappa0),
-                "error": float(err[-200:].mean()),
+                "error": err,
+                "error_fro": float(error_fro),
+                "error_trace": float(error_trace),
+                "error_bures": float(error_bures),
                 "frame": frame,
             }
         ],
@@ -63,12 +73,13 @@ def simulate_one(n, eta_g, n_batch, batch_size, frame):
 
 
 def submit():
-    timestamp = pd.Timestamp.now().strftime("%Y%m%d/%H_%M_%S")
+    np.random.seed(42069)
+    timestamp = pd.Timestamp.now().strftime("%Y_%m_%d/%H_%M_%S")
     output_path = Path(f"outputs/{timestamp}")
     output_path.mkdir(parents=True, exist_ok=True)
     df_sim = pd.DataFrame()
-    all_n = np.arange(5, 25)
-    n_batch = 2000
+    all_n = np.arange(5, 26)
+    n_batch = 2048
     batch_size = 512
     n_repeats = 20
     eta_g = 5e-3
@@ -90,7 +101,7 @@ def submit():
 
     jobs = []
     with executor.batch():
-        for frame in ["GRASSMAN", "RANDN"]:
+        for frame in ["GRASSMANN", "RANDN"]:
             for n in all_n:
                 for _ in range(n_repeats):
                     job = executor.submit(
@@ -110,9 +121,7 @@ def submit():
     prev_finished, num_finished = 0, 0
     idx_finished = set({})
 
-    df_sim = pd.DataFrame(
-        columns=["n", "k", "n_batch", "batch_size", "kappa0", "error", "frame"],
-    )
+    df_sim = pd.DataFrame()  # init empty df
     while num_finished != n_jobs:
         for j, job in enumerate(jobs):
             if job.done() and j not in idx_finished:
@@ -126,21 +135,6 @@ def submit():
         time.sleep(5.0)
 
     df_sim.to_csv(output_path / "dim_experiment_results.csv", index=False)
-
-
-# with sns.plotting_context("paper", font_scale=1.5):
-#     fig, ax = plt.subplots(1, 1, dpi=300)
-#     sns.scatterplot(x="n", y="error", data=df_sim, ax=ax)
-#     ax.set(ylim=(1e-4, 1e-0), yscale="log", xlabel="N", ylabel="Error")
-#     sns.despine()
-# fig.savefig("figures/dim_experiment.png")
-# df_sim.to_csv("experiments/dim_experiment.csv")
-
-# #%%
-# err_to_plot = np.stack(all_error, -1)
-# fig, ax = plt.subplots(1, 1)
-# ax.plot(err_to_plot)
-# ax.set(yscale="log")
 
 
 if __name__ == "__main__":
