@@ -11,15 +11,27 @@ from tqdm import tqdm
 import pandas as pd
 import submitit
 import time
-import pathlib
 from pathlib import Path
 
 #%%
 
 
-def simulate(Lxx, W, eta_g, n_batch, batch_size):
-    n, k = W.shape
-    g = np.ones(k)
+def simulate_one(n, eta_g, n_batch, batch_size, frame):
+    # setup
+    k = n * (n + 1) // 2
+    print(f"n = {n}, k = {k}")
+    V, _ = np.linalg.qr(np.random.randn(n, n))
+    s = np.linspace(1, 5, n) + np.random.randn(n) * 0.1
+    Cxx = V @ np.diag(s) @ V.T
+    Lxx = np.linalg.cholesky(Cxx)
+    kappa0 = np.linalg.cond(Cxx)
+    if frame == "GRASSMAN":
+        W, G, res = fw.get_grassmanian(n, k, niter=400)
+    elif frame == "RANDN":
+        W = np.random.randn(n, k)
+        W = fw.normalize_frame(W)
+
+    # run whitening
     error = []
     g = np.ones(k)
     Inn = np.eye(n)
@@ -32,51 +44,21 @@ def simulate(Lxx, W, eta_g, n_batch, batch_size):
         Cyy = np.cov(Y)
         err_sq = np.linalg.norm(Inn - Cyy) ** 2
         error.append(err_sq)
-    fro_d2 = np.array(error) / n**2
-    return fro_d2
+    err = np.array(error) / n**2
 
-
-def simulate_many(n, eta_g, n_repeats, n_batch, batch_size, frame):
-    k = n * (n + 1) // 2
-    print(f"n = {n}, k = {k}")
-
-    all_error = []
-
-    pbar = tqdm(range(n_repeats))
-    V, _ = np.linalg.qr(np.random.randn(n, n))
-    s = np.linspace(1, 5, n) + np.random.randn(n) * 0.1
-    Cxx = V @ np.diag(s) @ V.T
-    Lxx = np.linalg.cholesky(Cxx)
-    kappa0 = np.linalg.cond(Cxx)
     df_sim = pd.DataFrame(
-        columns=["n", "k", "n_batch", "batch_size", "kappa0", "error", "frame"],
+        [
+            {
+                "n": n,
+                "k": k,
+                "n_batch": n_batch,
+                "batch_size": batch_size,
+                "kappa0": float(kappa0),
+                "error": float(err[-200:].mean()),
+                "frame": frame,
+            }
+        ],
     )
-    for _ in pbar:
-        if frame == "GRASSMAN":
-            W, G, res = fw.get_grassmanian(n, k, niter=400)
-        elif frame == "RANDN":
-            W = np.random.randn(n, k)
-            W = fw.normalize_frame(W)
-
-        pbar.set_postfix({"W_init": True})
-
-        err = simulate(Lxx, W, eta_g, n_batch, batch_size)
-        df_tmp = pd.DataFrame(
-            [
-                {
-                    "n": n,
-                    "k": k,
-                    "n_batch": n_batch,
-                    "batch_size": batch_size,
-                    "kappa0": float(kappa0),
-                    "error": float(err[-200:].mean()),
-                    "frame": frame,
-                }
-            ],
-        )
-        df_sim = df_sim.append([df_sim, df_tmp], ignore_index=True)
-        all_error.append(err)
-
     return df_sim
 
 
@@ -110,16 +92,16 @@ def submit():
     with executor.batch():
         for frame in ["GRASSMAN", "RANDN"]:
             for n in all_n:
-                job = executor.submit(
-                    simulate_many,
-                    n,
-                    eta_g,
-                    n_repeats,
-                    n_batch,
-                    batch_size,
-                    frame,
-                )
-                jobs.append(job)
+                for _ in range(n_repeats):
+                    job = executor.submit(
+                        simulate_one,
+                        n,
+                        eta_g,
+                        n_batch,
+                        batch_size,
+                        frame,
+                    )
+                    jobs.append(job)
     n_jobs = len(jobs)
     print(f"you are running {n_jobs} jobs 😅")
 
