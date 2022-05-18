@@ -11,6 +11,8 @@ from tqdm import tqdm
 import pandas as pd
 import submitit
 import time
+import pathlib
+from pathlib import Path
 
 #%%
 
@@ -34,7 +36,7 @@ def simulate(Lxx, W, eta_g, n_batch, batch_size):
     return fro_d2
 
 
-def simulate_many(n, eta_g, n_repeats, n_batch, batch_size):
+def simulate_many(n, eta_g, n_repeats, n_batch, batch_size, frame):
     k = n * (n + 1) // 2
     print(f"n = {n}, k = {k}")
 
@@ -47,12 +49,15 @@ def simulate_many(n, eta_g, n_repeats, n_batch, batch_size):
     Lxx = np.linalg.cholesky(Cxx)
     kappa0 = np.linalg.cond(Cxx)
     df_sim = pd.DataFrame(
-        columns=["n", "k", "n_batch", "batch_size", "kappa0", "error"],
-        dtype=(np.float64),
+        columns=["n", "k", "n_batch", "batch_size", "kappa0", "error", "frame"],
     )
     for _ in pbar:
+        if frame == "GRASSMAN":
+            W, G, res = fw.get_grassmanian(n, k, niter=400)
+        elif frame == "RANDN":
+            W = np.random.randn(n, k)
+            W = fw.normalize_frame(W)
 
-        W, G, res = fw.get_grassmanian(n, k, niter=400)
         pbar.set_postfix({"W_init": True})
 
         err = simulate(Lxx, W, eta_g, n_batch, batch_size)
@@ -63,11 +68,11 @@ def simulate_many(n, eta_g, n_repeats, n_batch, batch_size):
                     "k": k,
                     "n_batch": n_batch,
                     "batch_size": batch_size,
-                    "kappa0": kappa0,
+                    "kappa0": float(kappa0),
                     "error": float(err[-200:].mean()),
+                    "frame": frame,
                 }
             ],
-            dtype=(np.float64),
         )
         df_sim = df_sim.append([df_sim, df_tmp], ignore_index=True)
         all_error.append(err)
@@ -76,9 +81,11 @@ def simulate_many(n, eta_g, n_repeats, n_batch, batch_size):
 
 
 def submit():
-    output_path = "outputs/"
+    timestamp = pd.Timestamp.now().strftime("%Y%m%d/%H_%M_%S")
+    output_path = Path(f"outputs/{timestamp}")
+    output_path.mkdir(parents=True, exist_ok=True)
     df_sim = pd.DataFrame()
-    all_n = np.arange(5, 20)
+    all_n = np.arange(5, 25)
     n_batch = 2000
     batch_size = 512
     n_repeats = 20
@@ -88,7 +95,6 @@ def submit():
 
     print("settin slurm")
     # set up slurm
-    timestamp = pd.Timestamp.now().strftime("%Y%m%d/%H%M%S")
     slurm_path = f"slurm/dimensionality/{timestamp}/%j"
     executor = submitit.AutoExecutor(folder=slurm_path)
     executor.update_parameters(
@@ -102,16 +108,18 @@ def submit():
 
     jobs = []
     with executor.batch():
-        for n in all_n:
-            job = executor.submit(
-                simulate_many,
-                n,
-                eta_g,
-                n_repeats,
-                n_batch,
-                batch_size,
-            )
-            jobs.append(job)
+        for frame in ["GRASSMAN", "RANDN"]:
+            for n in all_n:
+                job = executor.submit(
+                    simulate_many,
+                    n,
+                    eta_g,
+                    n_repeats,
+                    n_batch,
+                    batch_size,
+                    frame,
+                )
+                jobs.append(job)
     n_jobs = len(jobs)
     print(f"you are running {n_jobs} jobs 😅")
 
@@ -121,8 +129,7 @@ def submit():
     idx_finished = set({})
 
     df_sim = pd.DataFrame(
-        columns=["n", "k", "n_batch", "batch_size", "kappa0", "error"],
-        dtype=(np.float64),
+        columns=["n", "k", "n_batch", "batch_size", "kappa0", "error", "frame"],
     )
     while num_finished != n_jobs:
         for j, job in enumerate(jobs):
@@ -136,7 +143,7 @@ def submit():
             prev_finished = num_finished
         time.sleep(5.0)
 
-    df_sim.to_csv(output_path + "dim_experiment_results.csv", index=False)
+    df_sim.to_csv(output_path / "dim_experiment_results.csv", index=False)
 
 
 # with sns.plotting_context("paper", font_scale=1.5):
