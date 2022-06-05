@@ -4,7 +4,8 @@ Enforce positive g's.
 Assume G is G*G and re-derive as before.
 
 June 2022
-seems to work?
+
+TODO: I messed up the math. need to fix.
 """
 
 import numpy as np
@@ -57,7 +58,7 @@ def simulate(
 
             dg = np.mean(z**2, -1) - w_norm2  # more efficient, local gradient
             if enforce_positive:
-                dg *= g**2
+                dg *= 2 * g
 
             g = g + lr_g * dg  # gradient descent
             M = np.linalg.inv(W @ G @ W.T)
@@ -75,17 +76,18 @@ def simulate(
 np.random.seed(420)
 num_switches = 2
 n, k = 2, 3
-batch_size = 256
+batch_size = 16
 n_batch = 10000
 lr_g = 3e-2
 
 # V, _ = np.linalg.qr(np.random.randn(n, n))
 # Cxx0 = V @ np.diag([3.5, 1]) @ V.T * 0.1
 Q = fw.rot2(np.deg2rad(30))
-Cxx0 = Q @ np.diag([20, 1]) @ Q.T * 1.0
+Cxx0 = Q @ np.diag([20.0, 1]) @ Q.T * 1.0
 
 V, _ = np.linalg.qr(np.random.randn(n, n))
-Cxx1 = V @ np.diag([3.0, 1]) @ V.T * 0.5
+V = np.eye(n)
+Cxx1 = V @ np.diag([100.0, 1]) @ V.T * 0.5
 cholesky_list = [np.linalg.cholesky(C) for C in (Cxx0, Cxx1)]
 W = fw.get_mercedes_frame()
 # W = fw.normalize_frame(np.random.randn(n, k))
@@ -96,8 +98,8 @@ fwplt.plot_frame2d(W, ax=ax, plot_line=True)
 ax.axis("square")
 ax.set(xlim=(-4, 4), ylim=(-4, 4))
 
-#%%
-g0 = np.array([0.01, 1.2, 0.25])
+
+# g0 = np.array([0.01, 1.2, 0.25])
 g0 = np.ones(k)
 sim_resp = simulate(
     cholesky_list,
@@ -128,6 +130,7 @@ for i, Lxx in enumerate(cholesky_list):
         np.sqrt(g_opt), i * n_batch, (i * n_batch) + n_batch, linestyle="--", alpha=0.5
     )
 
-ax.set(yscale="log", ylim=(1e-2, 1e1))
+ax.set(yscale="linear", ylim=(-1, 2))
+sns.despine()
 
 #%%
