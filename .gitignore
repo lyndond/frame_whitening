@@ -9,6 +9,7 @@ __pycache__/
 *.csv
 slurm/
 outputs/
+deprecated/
 *.png
 *.pdf
 !assets/*.png
