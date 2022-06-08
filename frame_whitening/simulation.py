@@ -5,6 +5,8 @@ from .stats import sample_x
 
 
 def get_opt_funcs(func_type: str) -> Tuple[Callable, Callable]:
+    """Returns optimization functions depending on f(g) function type."""
+    assert func_type in FUNC_TYPES, f"func_type must be in {FUNC_TYPES}"
     if func_type == POLYNOMIAL:
         get_y = get_y_poly
         get_dg = get_dg_poly

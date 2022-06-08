@@ -1,12 +1,10 @@
 #%%
-"""
-A randomized linear algebra approach to Frame whitening
+""" Test random frames at different dims and their ability to whiten.
+Uses Slurm to submit hundreds of jobs and parallelizes compute w/ cluster.
+May 2022
 """
 import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 import frame_whitening as fw
-import frame_whitening.plot as fwplt
 from tqdm import tqdm
 import pandas as pd
 import submitit
