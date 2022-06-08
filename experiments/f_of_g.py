@@ -20,41 +20,51 @@ from frame_whitening.types import *
 import frame_whitening.simulation as fwsim
 
 #%%
-
-np.random.seed(420)
-n_contexts = 2
+seed = 42069
+np.random.seed(seed)
 n, k = 2, 3
-batch_size = 256
-n_batch = 20000
-lr_g = 5e-3
+batch_size = 1
+n_batch = 100
+lr_g = 1e-5
 
-# V, _ = np.linalg.qr(np.random.randn(n, n))
-# Cxx0 = V @ np.diag([3.5, 1]) @ V.T * 0.1
-Q = fw.rot2(np.deg2rad(45))
+Q = fw.rot2(np.deg2rad(30))
 kappa = 8
 Cxx0 = Q @ np.diag([kappa, 1]) @ Q.T * 1 / (np.sqrt(kappa))
 
 cholesky_list = [np.linalg.cholesky(C) for C in [Cxx0]]
 W = fw.get_mercedes_frame()
-# tx = np.deg2rad(30)
-# W = np.concatenate([W, np.array([[np.cos(tx)], [np.sin(tx)]])], -1)
-# W = fw.normalize_frame(np.random.randn(n, 4))
 
 alphas = [0.0, 1.0, 2.0, 3.0, 5.0, 6.0]
 
 all_gs = []
 all_g_last = []
 
-func_type = "EXPONENTIAL"
-
+x_iter = range(1, n_batch + 1)
 with sns.plotting_context("paper", font_scale=1.5):
     sns.set_style("white")
     fig, ax = plt.subplots(1, 1, figsize=(12, 8), dpi=300)
     cols = sns.color_palette("mako", len(alphas))
     N, K = W.shape
-    g0 = np.log(np.ones(K) * 0.1)
+    # TODO: make initializers for g0
+    # g0 = np.log(np.ones(K) * 0.1)
+    g0 = np.ones(K) * 0.0912766
 
     get_y, get_dg = fwsim.get_opt_funcs(EXPONENTIAL)
+
+    def get_y(g, W, x):
+        G = np.diag(g * np.exp(g))
+        y = np.linalg.inv(W @ G @ W.T) @ x
+        return y, G
+
+    def get_dg(g, W, y):
+        """Compute gradient of objective wrt g when f(g) = gexp(g)."""
+        w0 = np.sum(W**2, axis=0)
+        z = W.T @ y
+        dv = (z**2).mean(axis=-1) - w0
+        deriv = np.exp(g) * (g + 1)
+        dg = -deriv * dv
+        return dg
+
     sim_resp = fwsim.simulate(
         cholesky_list,
         W,
@@ -64,12 +74,14 @@ with sns.plotting_context("paper", font_scale=1.5):
         n_batch,
         lr_g,
         g0=g0,
+        seed=seed,
     )
     g_last, g_all, errors = sim_resp
     all_gs.append(g_all)
     all_g_last.append(g_last)
-    label = r"$\exp({\bf g})$"
-    ax.plot(errors, color="C3", label=label, linewidth=2, alpha=0.7)
+    label = r"${\bf g}\exp({\bf g})$"
+    # TODO: fix legend!
+    ax.plot(x_iter, errors, color="C3", label=label, linewidth=2, alpha=0.7)
 
     get_y, get_dg = fwsim.get_opt_funcs(POLYNOMIAL)
     for i, alpha in enumerate(alphas):
@@ -84,17 +96,18 @@ with sns.plotting_context("paper", font_scale=1.5):
             n_batch,
             lr_g,
             g0=g0,
+            seed=seed,
         )
         g_last, g_all, errors = sim_resp
         all_gs.append(g_all)
         all_g_last.append(g_last)
         label = r"${\bf g}^" + f"{alpha+1:.0f}" + r"$"
-        ax.plot(errors, color=cols[i], label=label, linewidth=2, alpha=0.5)
+        ax.plot(x_iter, errors, color=cols[i], label=label, linewidth=2, alpha=0.5)
 
     ax.set(
         yscale="log",
-        xscale="log",
-        ylim=(1e-4, 1e2),
+        xscale="linear",
+        # ylim=(1e-4, 1e2),
         xlim=(1, n_batch),
         xlabel="iteration",
         ylabel=r"Error: $\frac{1}{N}$ Tr($\vert {\bf C}_{yy} - {\bf I} \vert$)",
@@ -102,6 +115,10 @@ with sns.plotting_context("paper", font_scale=1.5):
     )
     ax.legend(title=r"$f({\bf g})$")
     sns.despine()
+#%%
+
+plt.plot(all_gs[0] * np.exp(all_gs[0]))
+# plt.plot(all_gs[1] ** 2)
 
 #%%
 

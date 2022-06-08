@@ -81,11 +81,12 @@ def simulate(
             x = sample_x(Lxx, batch_size)  # draw a sample of x
 
             y, G = get_y(g, W, x)
-            dg = get_dg(g, W, y)
-            g = g - lr_g * dg  # gradient descent
             M = np.linalg.inv(W @ G @ W.T)
             error = np.trace(np.abs(M @ Cxx @ M.T - Ixx)) / n
             errors.append(error)
+
+            dg = get_dg(g, W, y)
+            g = g - lr_g * dg  # gradient descent
             z = W.T @ y
             responses.append((x.mean(-1), y.mean(-1), z.mean(-1)))
             g_all.append(g)
