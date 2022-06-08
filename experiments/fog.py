@@ -1,43 +1,67 @@
 #%%
-"""Test the effect of varying alpha
+"""Test nonlinearities on gain vector
+fog.py (f of g)
+
+This uses f(g) = g^{alpha + 1} or f(g)=exp(g) as the nonlinearity on g, as a means to prevent 
+negative values.
+
 June 06, 2022
 Seems to increase in convergence speed for with increasing alpha
 """
 
-from turtle import bgcolor
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import frame_whitening as fw
 import frame_whitening.plot as fwplt
+from functools import partial
+from typing import List, Tuple, Callable, Optional
 
 #%%
-def get_y_ss(g, W, x, alpha=0):
-    """Compute steady-state y for a given x and g and alpha"""
+def get_y_poly(g, W, x, alpha=0):
+    """Compute steady-state y for a given x and g and alpha
+    f(g) = g^{alpha+1}
+    """
     G = np.diag(g ** (alpha + 1))
     y = np.linalg.inv(W @ G @ W.T) @ x
-    return y
+    return y, G
 
 
-def get_dg(g, W, y, alpha=0):
+def get_dg_poly(g, W, y, alpha=0):
+    """Compute gradient of objective wrt g when f(g) = g^{alpha+1}."""
     w0 = np.sum(W**2, axis=0)
     z = W.T @ y
     dv = (z**2).mean(axis=-1) - w0
     dg = -(alpha + 1) * (g**alpha) * dv
-    # dg = -(0 + 1) * (g**alpha) * dv
+    return dg
+
+
+def get_y_exp(g, W, x):
+    G = np.diag(np.exp(g))
+    y = np.linalg.inv(W @ G @ W.T) @ x
+    return y, G
+
+
+def get_dg_exp(g, W, y):
+    """Compute gradient of objective wrt g when f(g) = exp(g)."""
+    w0 = np.sum(W**2, axis=0)
+    z = W.T @ y
+    dv = (z**2).mean(axis=-1) - w0
+    dg = -np.exp(g) * dv
     return dg
 
 
 def simulate(
-    cholesky_list,
-    W,
-    batch_size=64,
-    n_batch=1024,
-    lr_g=5e-3,
-    alpha=0,
-    g0=None,
-    seed=None,
-):
+    cholesky_list: Tuple[np.ndarray, ...],
+    W: np.ndarray,
+    get_y: Callable,
+    get_dg: Callable,
+    batch_size: int = 64,
+    n_batch: int = 1024,
+    lr_g: float = 5e-3,
+    g0: Optional[np.ndarray] = None,
+    seed: Optional[float] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     if seed is not None:
         np.random.seed(seed)
 
@@ -57,15 +81,14 @@ def simulate(
         for _ in range(n_batch):
             x = fw.sample_x(Lxx, batch_size)  # draw a sample of x
 
-            y_ss = get_y_ss(g, W, x, alpha=alpha)
-            dg = get_dg(g, W, y_ss, alpha=alpha)
+            y, G = get_y(g, W, x)
+            dg = get_dg(g, W, y)
             g = g - lr_g * dg  # gradient descent
-            G = np.diag(g ** (alpha + 1))
             M = np.linalg.inv(W @ G @ W.T)
             error = np.trace(np.abs(M @ Cxx @ M.T - Ixx)) / n
             errors.append(error)
-            z = W.T @ y_ss
-            responses.append((x.mean(-1), y_ss.mean(-1), z.mean(-1)))
+            z = W.T @ y
+            responses.append((x.mean(-1), y.mean(-1), z.mean(-1)))
             g_all.append(g)
     g_last = g
     g_all = np.stack(g_all, 0)
@@ -78,14 +101,14 @@ np.random.seed(420)
 n_contexts = 2
 n, k = 2, 3
 batch_size = 256
-n_batch = 5000
-lr_g = 1e-3
+n_batch = 20000
+lr_g = 5e-3
 
 # V, _ = np.linalg.qr(np.random.randn(n, n))
 # Cxx0 = V @ np.diag([3.5, 1]) @ V.T * 0.1
 Q = fw.rot2(np.deg2rad(45))
 kappa = 8
-Cxx0 = Q @ np.diag([20, 1]) @ Q.T * 1 / (np.sqrt(kappa))
+Cxx0 = Q @ np.diag([kappa, 1]) @ Q.T * 1 / (np.sqrt(kappa))
 
 cholesky_list = [np.linalg.cholesky(C) for C in [Cxx0]]
 W = fw.get_mercedes_frame()
@@ -93,43 +116,83 @@ W = fw.get_mercedes_frame()
 # W = np.concatenate([W, np.array([[np.cos(tx)], [np.sin(tx)]])], -1)
 # W = fw.normalize_frame(np.random.randn(n, 4))
 
-# alphas = [0.0, 1.0, 2.0, 3.0, 5.0, 6.0]
-# alphas = [2.0]
-alphas = [0.0, 1.0]
+alphas = [0.0, 1.0, 2.0, 3.0, 5.0, 6.0]
+
 all_gs = []
 all_g_last = []
+
+POLYNOMIAL = "POLYNOMIAL"
+EXPONENTIAL = "EXPONENTIAL"
+FUNC_TYPES = [POLYNOMIAL, EXPONENTIAL]
+
+func_type = "EXPONENTIAL"
+
+
+def get_opt_funcs(func_type: str) -> Tuple[Callable, Callable]:
+    if func_type == POLYNOMIAL:
+        get_y = get_y_poly
+        get_dg = get_dg_poly
+    elif func_type == EXPONENTIAL:
+        get_y = get_y_exp
+        get_dg = get_dg_exp
+
+    return get_y, get_dg
+
+
 with sns.plotting_context("paper", font_scale=1.5):
     sns.set_style("white")
-    fig, ax = plt.subplots(1, 1, figsize=(8, 4), dpi=300)
+    fig, ax = plt.subplots(1, 1, figsize=(12, 8), dpi=300)
     cols = sns.color_palette("mako", len(alphas))
     N, K = W.shape
-    # g0 = np.random.randn(K)
+    g0 = np.log(np.ones(K) * 0.1)
+
+    get_y, get_dg = get_opt_funcs(EXPONENTIAL)
+    sim_resp = simulate(
+        cholesky_list,
+        W,
+        get_y,
+        get_dg,
+        batch_size,
+        n_batch,
+        lr_g,
+        g0=g0,
+    )
+    g_last, g_all, errors = sim_resp
+    all_gs.append(g_all)
+    all_g_last.append(g_last)
+    label = r"$\exp({\bf g})$"
+    ax.plot(errors, color="C3", label=label, linewidth=2, alpha=0.7)
+
+    get_y, get_dg = get_opt_funcs(POLYNOMIAL)
     for i, alpha in enumerate(alphas):
         g0 = np.float_power(np.ones(K) * 0.1, 1 / (alpha + 1))
 
         sim_resp = simulate(
             cholesky_list,
             W,
+            partial(get_y, alpha=alpha),
+            partial(get_dg, alpha=alpha),
             batch_size,
             n_batch,
             lr_g,
-            alpha=alpha,
             g0=g0,
         )
         g_last, g_all, errors = sim_resp
         all_gs.append(g_all)
         all_g_last.append(g_last)
-        ax.plot(errors, color=cols[i], label=f"{alpha}", linewidth=2)
+        label = r"${\bf g}^" + f"{alpha+1:.0f}" + r"$"
+        ax.plot(errors, color=cols[i], label=label, linewidth=2, alpha=0.5)
 
     ax.set(
         yscale="log",
-        # ylim=(1e-4, 1e0),
-        xlim=(0, n_batch),
+        xscale="log",
+        ylim=(1e-4, 1e2),
+        xlim=(1, n_batch),
         xlabel="iteration",
         ylabel=r"Error: $\frac{1}{N}$ Tr($\vert {\bf C}_{yy} - {\bf I} \vert$)",
         title=f"$\eta_g=${lr_g:.2e}, batch_size={batch_size}",
     )
-    ax.legend(title=r"$\alpha$")
+    ax.legend(title=r"$f({\bf g})$")
     sns.despine()
 
 #%%
