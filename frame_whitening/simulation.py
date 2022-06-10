@@ -1,23 +1,28 @@
 import numpy as np
 from typing import Tuple, Callable, Optional
+
 from .types import *
 from .stats import sample_x
+from scipy import optimize
 
 
 def get_opt_funcs(func_type: str) -> Tuple[Callable, Callable]:
     """Returns optimization functions depending on f(g) function type."""
-    assert func_type in FUNC_TYPES, f"func_type must be in {FUNC_TYPES}"
-    if func_type == POLYNOMIAL:
-        get_y = get_y_poly
-        get_dg = get_dg_poly
-    elif func_type == EXPONENTIAL:
+    assert func_type in FuncType, f"func_type must be in {FuncType}"
+    if func_type == FuncType.POWER:
+        get_y = get_y_pow
+        get_dg = get_dg_pow
+    elif func_type == FuncType.EXPONENTIAL:
         get_y = get_y_exp
         get_dg = get_dg_exp
+    elif func_type == FuncType.G_EXPONENTIAL:
+        get_y = get_y_g_exp
+        get_dg = get_dg_g_exp
 
     return get_y, get_dg
 
 
-def get_y_poly(g, W, x, alpha=0):
+def get_y_pow(g, W, x, alpha=0):
     """Compute steady-state y for a given x and g and alpha
     f(g) = g^{alpha+1}
     """
@@ -26,7 +31,7 @@ def get_y_poly(g, W, x, alpha=0):
     return y, G
 
 
-def get_dg_poly(g, W, y, alpha=0):
+def get_dg_pow(g, W, y, alpha=0):
     """Compute gradient of objective wrt g when f(g) = g^{alpha+1}."""
     w0 = np.sum(W**2, axis=0)
     z = W.T @ y
@@ -48,6 +53,41 @@ def get_dg_exp(g, W, y):
     dv = (z**2).mean(axis=-1) - w0
     dg = -np.exp(g) * dv
     return dg
+
+
+def get_y_g_exp(g, W, x):
+    G = np.diag(g * np.exp(g))
+    y = np.linalg.inv(W @ G @ W.T) @ x
+    return y, G
+
+
+def get_dg_g_exp(g, W, y):
+    """Compute gradient of objective wrt g when f(g) = gexp(g)."""
+    w0 = np.sum(W**2, axis=0)
+    z = W.T @ y
+    dv = (z**2).mean(axis=-1) - w0
+    deriv = np.exp(g) * (g + 1)
+    dg = -deriv * dv
+    return dg
+
+
+def init_g_const(const: float, k: int, func_type: FuncType, alpha=None):
+    assert const >= 0, "g0 must be non-negative"
+    g0 = np.ones(k) * const
+    if func_type == FuncType.POWER:
+        # solve f(g) = g^(alpha+1) = const
+        g0 = np.float_power(g0, 1 / (alpha + 1))
+
+    elif func_type == FuncType.EXPONENTIAL:
+        # solve f(g) = exp(g) = const
+        g0 = np.log(g0)
+
+    elif func_type == FuncType.G_EXPONENTIAL:
+        # need to numerically solve for f(g) = g*exp(g) = const
+        func = lambda x: x * np.exp(x) - const
+        g0 = np.ones(k) * optimize.fsolve(func, [1])[0]
+
+    return g0
 
 
 def simulate(
