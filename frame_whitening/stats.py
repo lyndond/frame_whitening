@@ -12,6 +12,17 @@ def randcov2(cond_max: float = 3.0, l_max: float = 2) -> Tuple[np.ndarray, np.nd
     return C, L
 
 
+def randcovn(
+    N, cond_max: float = 3.0, l_max: float = 2
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Return 2D covariance matrix with condition number less than cond_max and its cholesky factor"""
+    Q, _ = np.linalg.qr(np.random.randn(N, N))
+    D = np.diag(np.arange(1, N + 1)) * cond_max * np.random.rand() * l_max
+    C = Q @ D @ Q.T
+    L = np.linalg.cholesky(C)
+    return C, L
+
+
 def geometric_mean(C1: np.ndarray, C2: np.ndarray, t: float = 1 / 2) -> np.ndarray:
     # t-distance geodesic matrix between two PSD matrices
     raise NotImplementedError

@@ -15,7 +15,6 @@ import matplotlib.pyplot as plt
 from functools import partial
 
 import frame_whitening as fw
-import frame_whitening.plot as fwplt
 from frame_whitening.types import *
 import frame_whitening.simulation as fwsim
 
