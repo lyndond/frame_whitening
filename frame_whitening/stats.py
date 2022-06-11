@@ -15,7 +15,7 @@ def randcov2(cond_max: float = 3.0, l_max: float = 2) -> Tuple[np.ndarray, np.nd
 def randcovn(
     N, cond_max: float = 3.0, l_max: float = 2
 ) -> Tuple[np.ndarray, np.ndarray]:
-    """Return 2D covariance matrix with condition number less than cond_max and its cholesky factor"""
+    """Return ND covariance matrix with condition number less than cond_max and its cholesky factor"""
     Q, _ = np.linalg.qr(np.random.randn(N, N))
     D = np.diag(np.arange(1, N + 1)) * cond_max * np.random.rand() * l_max
     C = Q @ D @ Q.T

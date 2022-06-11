@@ -49,7 +49,7 @@ def get_dg_exp_beta(g, W, y, beta):
 
 #%%  run sim
 
-batch_size = 256
+batch_size = 1024
 n_batch = 5000
 lr_g = 5e-1
 beta = 0.005

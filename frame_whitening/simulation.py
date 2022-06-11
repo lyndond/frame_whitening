@@ -31,12 +31,12 @@ def get_y_pow(g, W, x, alpha=0):
     return y, G
 
 
-def get_dg_pow(g, W, y, alpha=0):
+def get_dg_pow(g, W, y, alpha=0, beta=0.0):
     """Compute gradient of objective wrt g when f(g) = g^{alpha+1}."""
     w0 = np.sum(W**2, axis=0)
     z = W.T @ y
     dv = (z**2).mean(axis=-1) - w0
-    dg = -(alpha + 1) * (g**alpha) * dv
+    dg = -(alpha + 1) * (g**alpha) * dv + beta * np.sign(g ** (1 + alpha))
     return dg
 
 
@@ -46,12 +46,12 @@ def get_y_exp(g, W, x):
     return y, G
 
 
-def get_dg_exp(g, W, y):
+def get_dg_exp(g, W, y, beta=0):
     """Compute gradient of objective wrt g when f(g) = exp(g)."""
     w0 = np.sum(W**2, axis=0)
     z = W.T @ y
     dv = (z**2).mean(axis=-1) - w0
-    dg = -np.exp(g) * dv
+    dg = -np.exp(g) * dv + beta * np.sign(np.exp(g))
     return dg
 
 
@@ -61,13 +61,13 @@ def get_y_g_exp(g, W, x):
     return y, G
 
 
-def get_dg_g_exp(g, W, y):
+def get_dg_g_exp(g, W, y, beta=0.0):
     """Compute gradient of objective wrt g when f(g) = gexp(g)."""
     w0 = np.sum(W**2, axis=0)
     z = W.T @ y
     dv = (z**2).mean(axis=-1) - w0
     deriv = np.exp(g) * (g + 1)
-    dg = -deriv * dv
+    dg = -deriv * dv + beta * np.sign(g * np.exp(g))
     return dg
 
 

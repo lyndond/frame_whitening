@@ -5,7 +5,7 @@ fog.py (f of g)
 This uses f(g) = g^{alpha + 1} or f(g)=exp(g) as the nonlinearity on g, as a means to prevent 
 negative values.
 
-June 06, 2022
+June 10, 2022
 Seems to increase in convergence speed for with increasing alpha
 """
 
