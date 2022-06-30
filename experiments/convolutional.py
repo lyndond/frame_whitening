@@ -3,6 +3,9 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from functools import partial
+from tqdm import tqdm
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 #%%
 # deterministic initialization
@@ -67,5 +70,3 @@ for _ in pbar:  # update gains
     error = dvar.pow(2).mean()
     pbar.set_postfix({"Error proxy: mean((z^2 - 1)^2)": error.item()})
     E.append(error)
-
-#%%
