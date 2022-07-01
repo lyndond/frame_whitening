@@ -13,7 +13,7 @@ def randcov2(cond_max: float = 3.0, l_max: float = 2) -> Tuple[np.ndarray, np.nd
 
 
 def randcovn(
-    N, cond_max: float = 3.0, l_max: float = 2
+    N: int, cond_max: float = 3.0, l_max: float = 2
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Return ND covariance matrix with condition number less than cond_max and its cholesky factor"""
     Q, _ = np.linalg.qr(np.random.randn(N, N))
@@ -46,7 +46,7 @@ def bures_fidelity(C1: np.ndarray, C2: np.ndarray) -> float:
     return F
 
 
-def psd_sqrt(C):
+def psd_sqrt(C: np.ndarray) -> np.ndarray:
     """Computes PSD square root"""
     Csqrt = fractional_matrix_power(C, 0.5)
     return Csqrt
