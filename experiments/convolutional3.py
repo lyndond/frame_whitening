@@ -28,8 +28,18 @@ W_hat = W_hat_transpose.T  # flip it
 
 # generate Cxx
 N = 3
-A = np.random.randn(N, N)
-Cxx = A @ A.T
+# construct a local banded Cxx
+Cxx = np.array(
+    (
+        [2.0, -1, 0.5],
+        [-1, 2.0, -1],
+        [0.5, -1, 2.0],
+    )
+)
+
+# random Cxx
+# A = np.random.randn(N, N)
+# Cxx = A @ A.T
 
 T = 512  # batch size
 n_batch = int(2**13)
