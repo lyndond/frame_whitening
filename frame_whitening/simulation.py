@@ -6,23 +6,34 @@ from .stats import sample_x
 from scipy import optimize
 
 
-def get_opt_funcs(func_type: str) -> Tuple[Callable, Callable]:
-    """Returns optimization functions depending on f(g) function type."""
-    assert func_type in FuncType, f"func_type must be in {FuncType}"
+def get_opt_funcs(func_type: FuncType) -> Tuple[Callable, Callable]:
+    """Returns optimization functions depending on f(g) function type.
+
+    Parameters
+    ----------
+    func_type: Must be one of FuncType.POWER, FuncType.EXPONENTIAL, or FuncType.G_EXPONENTIAL.
+
+    Returns
+    -------
+    get_y: Function that returns steady-state y for a given W, x, and g.
+    get_dg: Function that returns gradient of objective wrt g.
+    """
     if func_type == FuncType.POWER:
-        get_y = get_y_pow
-        get_dg = get_dg_pow
+        get_y = _get_y_pow
+        get_dg = _get_dg_pow
     elif func_type == FuncType.EXPONENTIAL:
-        get_y = get_y_exp
-        get_dg = get_dg_exp
+        get_y = _get_y_exp
+        get_dg = _get_dg_exp
     elif func_type == FuncType.G_EXPONENTIAL:
-        get_y = get_y_g_exp
-        get_dg = get_dg_g_exp
+        get_y = _get_y_g_exp
+        get_dg = _get_dg_g_exp
+    else:
+        raise ValueError(f"func_type must be one of {FuncType.__members__}")
 
     return get_y, get_dg
 
 
-def get_y_pow(
+def _get_y_pow(
     g: np.ndarray, W: np.ndarray, x: np.ndarray, alpha: float = 0
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Compute steady-state y for a given x and g and alpha
@@ -33,7 +44,7 @@ def get_y_pow(
     return y, G
 
 
-def get_dg_pow(
+def _get_dg_pow(
     g: np.ndarray, W: np.ndarray, y: np.ndarray, alpha: float = 0, beta: float = 0
 ) -> np.ndarray:
     """Compute gradient of objective wrt g when f(g) = g^{alpha+1}."""
@@ -44,7 +55,7 @@ def get_dg_pow(
     return dg
 
 
-def get_y_exp(
+def _get_y_exp(
     g: np.ndarray, W: np.ndarray, x: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Compute steady-state y for a given W, x, and g."""
@@ -53,7 +64,7 @@ def get_y_exp(
     return y, G
 
 
-def get_dg_exp(
+def _get_dg_exp(
     g: np.ndarray, W: np.ndarray, y: np.ndarray, beta: float = 0
 ) -> np.ndarray:
     """Compute gradient of objective wrt g when f(g) = exp(g)."""
@@ -64,7 +75,7 @@ def get_dg_exp(
     return dg
 
 
-def get_y_g_exp(
+def _get_y_g_exp(
     g: np.ndarray, W: np.ndarray, x: np.ndarray
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Compute steady-state y for a given W, x and g."""
@@ -73,7 +84,7 @@ def get_y_g_exp(
     return y, G
 
 
-def get_dg_g_exp(
+def _get_dg_g_exp(
     g: np.ndarray, W: np.ndarray, y: np.ndarray, beta: float = 0.0
 ) -> np.ndarray:
     """Compute gradient of objective wrt g when f(g) = gexp(g)."""
@@ -91,14 +102,17 @@ def init_g_const(const: float, k: int, func_type: FuncType, alpha=None) -> np.nd
     g0 = np.ones(k) * const
     if func_type == FuncType.POWER:
         # solve f(g) = g^(alpha+1) = const
+        assert alpha is not None, "alpha must be specified for power function"
         g0 = np.float_power(g0, 1 / (alpha + 1))
 
     elif func_type == FuncType.EXPONENTIAL:
         # solve f(g) = exp(g) = const
+        assert alpha is None, "alpha must be None for exponential function"
         g0 = np.log(g0)
 
     elif func_type == FuncType.G_EXPONENTIAL:
         # need to numerically solve for f(g) = g*exp(g) = const
+        assert alpha is None, "alpha must be None for g-exponential function"
         func = lambda x: x * np.exp(x) - const
         g0 = np.ones(k) * optimize.fsolve(func, [1])[0]
 
