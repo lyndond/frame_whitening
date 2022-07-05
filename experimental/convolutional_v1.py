@@ -1,3 +1,6 @@
+"""Version 1 of convolutional whitening network.
+Assumes all spatial positions are independent.
+"""
 #%%
 import numpy as np
 import torch
