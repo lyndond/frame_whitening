@@ -56,8 +56,3 @@ def sample_x(Lxx: np.ndarray, n_samples: int = 1) -> np.ndarray:
     """Takes cholesky L to colour n_samples of white noise"""
     n = Lxx.shape[0]
     return Lxx @ np.random.randn(n, n_samples)
-
-
-def orthogonal2(th: float) -> np.ndarray:
-    rot = np.array([[np.cos(th), -np.sin(th)], [np.sin(th), np.cos(th)]])
-    return rot
