@@ -1,7 +1,7 @@
 import numpy as np
 from typing import Tuple, Callable, Optional
 
-from .types import *
+from .types import FuncType
 from .stats import sample_x
 from scipy import optimize
 
@@ -22,7 +22,9 @@ def get_opt_funcs(func_type: str) -> Tuple[Callable, Callable]:
     return get_y, get_dg
 
 
-def get_y_pow(g, W, x, alpha=0):
+def get_y_pow(
+    g: np.ndarray, W: np.ndarray, x: np.ndarray, alpha: float = 0
+) -> Tuple[np.ndarray, np.ndarray]:
     """Compute steady-state y for a given x and g and alpha
     f(g) = g^{alpha+1}
     """
@@ -31,7 +33,9 @@ def get_y_pow(g, W, x, alpha=0):
     return y, G
 
 
-def get_dg_pow(g, W, y, alpha=0, beta=0.0):
+def get_dg_pow(
+    g: np.ndarray, W: np.ndarray, y: np.ndarray, alpha: float = 0, beta: float = 0
+) -> np.ndarray:
     """Compute gradient of objective wrt g when f(g) = g^{alpha+1}."""
     w0 = np.sum(W**2, axis=0)
     z = W.T @ y
@@ -40,13 +44,18 @@ def get_dg_pow(g, W, y, alpha=0, beta=0.0):
     return dg
 
 
-def get_y_exp(g, W, x):
+def get_y_exp(
+    g: np.ndarray, W: np.ndarray, x: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Compute steady-state y for a given W, x, and g."""
     G = np.diag(np.exp(g))
     y = np.linalg.inv(W @ G @ W.T) @ x
     return y, G
 
 
-def get_dg_exp(g, W, y, beta=0):
+def get_dg_exp(
+    g: np.ndarray, W: np.ndarray, y: np.ndarray, beta: float = 0
+) -> np.ndarray:
     """Compute gradient of objective wrt g when f(g) = exp(g)."""
     w0 = np.sum(W**2, axis=0)
     z = W.T @ y
@@ -55,13 +64,18 @@ def get_dg_exp(g, W, y, beta=0):
     return dg
 
 
-def get_y_g_exp(g, W, x):
+def get_y_g_exp(
+    g: np.ndarray, W: np.ndarray, x: np.ndarray
+) -> Tuple[np.ndarray, np.ndarray]:
+    """Compute steady-state y for a given W, x and g."""
     G = np.diag(g * np.exp(g))
     y = np.linalg.inv(W @ G @ W.T) @ x
     return y, G
 
 
-def get_dg_g_exp(g, W, y, beta=0.0):
+def get_dg_g_exp(
+    g: np.ndarray, W: np.ndarray, y: np.ndarray, beta: float = 0.0
+) -> np.ndarray:
     """Compute gradient of objective wrt g when f(g) = gexp(g)."""
     w0 = np.sum(W**2, axis=0)
     z = W.T @ y
@@ -71,7 +85,8 @@ def get_dg_g_exp(g, W, y, beta=0.0):
     return dg
 
 
-def init_g_const(const: float, k: int, func_type: FuncType, alpha=None):
+def init_g_const(const: float, k: int, func_type: FuncType, alpha=None) -> np.ndarray:
+    """Initialize g with a constant value. Assumes positive constant."""
     assert const >= 0, "g0 must be non-negative"
     g0 = np.ones(k) * const
     if func_type == FuncType.POWER:
@@ -101,11 +116,31 @@ def simulate(
     g0: Optional[np.ndarray] = None,
     seed: Optional[float] = None,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Simulate data from a given model.
+
+    Parameters
+    ----------
+    cholesky_list: List of Cxx Cholesky factors to sample with.
+    W: Frame.
+    get_y: Function to compute y from g, W, and x.
+    get_dg: Function to compute gradient of objective wrt g.
+    batch_size: Number of samples to draw per batch.
+    n_batch: Number of batches to simulate.
+    lr_g: Learning rate for g.
+    g0: Initial value for g.
+    seed: Seed for random number generator.
+
+    Returns
+    -------
+    g_last: Last value of g.
+    g_all: All values of g throughout simulation.
+    errros: Error of Cyy compared to Identity matrix. Computed using trace(|Cyy - I|)/N.
+    """
     if seed is not None:
         np.random.seed(seed)
 
     # initialize random set of gains g
-    n, k = W.shape
+    N, K = W.shape
     if g0 is not None:
         g = g0
 
@@ -114,7 +149,7 @@ def simulate(
     errors = []
     responses = []
     # run simulation with minibatches
-    Ixx = np.eye(n)
+    Ixx = np.eye(N)
     for Lxx in cholesky_list:
         Cxx = Lxx @ Lxx.T
         for _ in range(n_batch):
@@ -122,7 +157,7 @@ def simulate(
 
             y, G = get_y(g, W, x)
             M = np.linalg.inv(W @ G @ W.T)
-            error = np.trace(np.abs(M @ Cxx @ M.T - Ixx)) / n
+            error = np.trace(np.abs(M @ Cxx @ M.T - Ixx)) / N
             errors.append(error)
 
             dg = get_dg(g, W, y)

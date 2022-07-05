@@ -1,6 +1,6 @@
 import numpy as np
 from scipy.linalg import fractional_matrix_power
-from typing import Tuple
+from typing import Tuple, Optional
 
 
 def normalize_frame(W: np.ndarray, axis: int = 0) -> np.ndarray:
@@ -77,7 +77,8 @@ def get_equiangular_3d() -> np.ndarray:
     ).T  # / np.sqrt(2)
 
 
-def get_rotation_matrix3d(alpha: float, beta: float, gamma: float):
+def get_rotation_matrix3d(alpha: float, beta: float, gamma: float) -> np.ndarray:
+    """Returns a 3D rotation matrix for values alpha (x), beta (y), gamma (z) in radians."""
     yaw = np.array(
         [
             [np.cos(alpha), -np.sin(alpha), 0],
@@ -139,7 +140,13 @@ def frame_svd(
 
 
 def get_grassmannian(
-    n, m, niter=100, fract_shrink=0.8, shrink_fact=0.9, A_init=None, expand=False
+    n: int,
+    m: int,
+    niter: int = 100,
+    fract_shrink: float = 0.8,
+    shrink_fact: float = 0.9,
+    A_init: Optional[np.ndarray] = None,
+    expand: bool = False,
 ):
     """Sample a tight frame with minimal mutual coherence, ie. the angle
     between any pair of column is the same, and the smallest it can be.
@@ -149,25 +156,18 @@ def get_grassmannian(
 
     Parameters
     ----------
-    n:
-        dimension of the ambient space
-    m:
-        number of vectors
-    niter:
-    fract_shrink:
-    shrink_fact:
-    A_init:
+    n: Dimension of the ambient space
+    m: Number of vectors
+    niter: Number of iterations to run.
+    fract_shrink: TODO(lyndo).
+    shrink_fact: TODO(lyndo).
+    A_init: Initial matrix (optional).
 
     Returns
     -------
-    W :
-        tight frame of shape [n, m], with normalized columns
-    G :
-        Gram matrix
-        G = A.T @ A
-        abs(Gij) = sqrt((m-n)/n(m-1))
-    Res :
-        'optimal mu', 'mean mu', 'obtained mu'
+    W : Tight frame of shape [n, m], with normalized columns
+    G : Gram matrix.
+    Res : 'optimal mu', 'mean mu', 'obtained mu'.
 
     Notes
     -----
