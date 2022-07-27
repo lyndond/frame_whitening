@@ -146,7 +146,7 @@ def simulate(
 
     Returns
     -------
-    g_last: Last value of g.
+    g_last: Last value of g for each matrix at end of each n_batch.
     g_all: All values of g throughout simulation.
     errros: Error of Cyy compared to Identity matrix. Computed using trace(|Cyy - I|)/N.
     """
@@ -179,6 +179,8 @@ def simulate(
             z = W.T @ y
             responses.append((x.mean(-1), y.mean(-1), z.mean(-1)))
             g_all.append(g)
-    g_last = g
+        g_last.append(g)
+
+    g_last = np.stack(g_last, 0)
     g_all = np.stack(g_all, 0)
     return g_last, g_all, errors
