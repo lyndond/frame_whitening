@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.typing as npt
 from typing import Tuple, Callable, Optional
 
 from .types import FuncType
@@ -6,7 +7,12 @@ from .stats import sample_x
 from scipy import optimize
 
 
-def get_opt_funcs(func_type: FuncType) -> Tuple[Callable, Callable]:
+def get_opt_funcs(
+    func_type: FuncType,
+) -> Tuple[
+    Callable[..., Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]],
+    Callable[..., npt.NDArray[np.float64]],
+]:
     """Returns optimization functions depending on f(g) function type.
 
     Parameters
@@ -34,8 +40,11 @@ def get_opt_funcs(func_type: FuncType) -> Tuple[Callable, Callable]:
 
 
 def _get_y_pow(
-    g: np.ndarray, W: np.ndarray, x: np.ndarray, alpha: float = 0
-) -> Tuple[np.ndarray, np.ndarray]:
+    g: npt.NDArray[np.float64],
+    W: npt.NDArray[np.float64],
+    x: npt.NDArray[np.float64],
+    alpha: float = 0,
+) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Compute steady-state y for a given x and g and alpha
     f(g) = g^{alpha+1}
     """
@@ -45,8 +54,12 @@ def _get_y_pow(
 
 
 def _get_dg_pow(
-    g: np.ndarray, W: np.ndarray, y: np.ndarray, alpha: float = 0, beta: float = 0
-) -> np.ndarray:
+    g: npt.NDArray[np.float64],
+    W: npt.NDArray[np.float64],
+    y: npt.NDArray[np.float64],
+    alpha: float = 0,
+    beta: float = 0,
+) -> npt.NDArray[np.float64]:
     """Compute gradient of objective wrt g when f(g) = g^{alpha+1}."""
     w0 = np.sum(W**2, axis=0)
     z = W.T @ y
@@ -56,8 +69,8 @@ def _get_dg_pow(
 
 
 def _get_y_exp(
-    g: np.ndarray, W: np.ndarray, x: np.ndarray
-) -> Tuple[np.ndarray, np.ndarray]:
+    g: npt.NDArray[np.float64], W: npt.NDArray[np.float64], x: npt.NDArray[np.float64]
+) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Compute steady-state y for a given W, x, and g."""
     G = np.diag(np.exp(g))
     y = np.linalg.inv(W @ G @ W.T) @ x
@@ -65,8 +78,11 @@ def _get_y_exp(
 
 
 def _get_dg_exp(
-    g: np.ndarray, W: np.ndarray, y: np.ndarray, beta: float = 0
-) -> np.ndarray:
+    g: npt.NDArray[np.float64],
+    W: npt.NDArray[np.float64],
+    y: npt.NDArray[np.float64],
+    beta: float = 0,
+) -> npt.NDArray[np.float64]:
     """Compute gradient of objective wrt g when f(g) = exp(g)."""
     w0 = np.sum(W**2, axis=0)
     z = W.T @ y
@@ -76,8 +92,8 @@ def _get_dg_exp(
 
 
 def _get_y_g_exp(
-    g: np.ndarray, W: np.ndarray, x: np.ndarray
-) -> Tuple[np.ndarray, np.ndarray]:
+    g: npt.NDArray[np.float64], W: npt.NDArray[np.float64], x: npt.NDArray[np.float64]
+) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Compute steady-state y for a given W, x and g."""
     G = np.diag(g * np.exp(g))
     y = np.linalg.inv(W @ G @ W.T) @ x
@@ -85,8 +101,11 @@ def _get_y_g_exp(
 
 
 def _get_dg_g_exp(
-    g: np.ndarray, W: np.ndarray, y: np.ndarray, beta: float = 0.0
-) -> np.ndarray:
+    g: npt.NDArray[np.float64],
+    W: npt.NDArray[np.float64],
+    y: npt.NDArray[np.float64],
+    beta: float = 0.0,
+) -> npt.NDArray[np.float64]:
     """Compute gradient of objective wrt g when f(g) = gexp(g)."""
     w0 = np.sum(W**2, axis=0)
     z = W.T @ y
@@ -96,7 +115,9 @@ def _get_dg_g_exp(
     return dg
 
 
-def init_g_const(const: float, k: int, func_type: FuncType, alpha=None) -> np.ndarray:
+def init_g_const(
+    const: float, k: int, func_type: FuncType, alpha: Optional[float] = None
+) -> npt.NDArray[np.float64]:
     """Initialize g with a constant value. Assumes positive constant."""
     assert const >= 0, "g0 must be non-negative"
     g0 = np.ones(k) * const
@@ -120,16 +141,16 @@ def init_g_const(const: float, k: int, func_type: FuncType, alpha=None) -> np.nd
 
 
 def simulate(
-    cholesky_list: Tuple[np.ndarray, ...],
-    W: np.ndarray,
+    cholesky_list: Tuple[npt.NDArray[np.float64], ...],
+    W: npt.NDArray[np.float64],
     get_y: Callable,
     get_dg: Callable,
     batch_size: int = 64,
     n_batch: int = 1024,
     lr_g: float = 5e-3,
-    g0: Optional[np.ndarray] = None,
+    g0: Optional[npt.NDArray[np.float64]] = None,
     seed: Optional[float] = None,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Simulate data from a given model.
 
     Parameters
@@ -155,13 +176,13 @@ def simulate(
 
     # initialize random set of gains g
     N, K = W.shape
-    if g0 is not None:
-        g = g0
+    g = g0 if g0 is not None else np.ones(K)
 
     g_all = []
     g_last = []
     errors = []
     responses = []
+
     # run simulation with minibatches
     Ixx = np.eye(N)
     for Lxx in cholesky_list:
@@ -183,4 +204,4 @@ def simulate(
 
     g_last = np.stack(g_last, 0)
     g_all = np.stack(g_all, 0)
-    return g_last, g_all, errors
+    return g_last, g_all, errors  # type: ignore
