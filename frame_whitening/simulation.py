@@ -21,7 +21,8 @@ def get_opt_funcs(
 
     Returns
     -------
-    get_y: Function that returns steady-state y for a given W, x, and g.
+    get_y: Function that returns steady-state y and G (with possible nonlinear activation)
+     for a given W, x, and g.
     get_dg: Function that returns gradient of objective wrt g.
     """
     if func_type == FuncType.POWER:
