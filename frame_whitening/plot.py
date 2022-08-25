@@ -1,8 +1,15 @@
+import matplotlib.axes
 import matplotlib.pyplot as plt
 import numpy as np
+import numpy.typing as npt
+from typing import Optional
 
 
-def plot_frame2d(R: np.ndarray, ax=None, plot_line: bool = False):
+def plot_frame2d(
+    R: npt.NDArray[np.float64],
+    ax: Optional[matplotlib.axes._subplots.AxesSubplot] = None,
+    plot_line: bool = False,
+) -> None:
     """Plots 2D frame vectors, optionally plot the axes along which they lie"""
     assert R.shape[0] == 2 and R.shape[1] > 2
     if ax is None:
@@ -20,7 +27,12 @@ def plot_frame2d(R: np.ndarray, ax=None, plot_line: bool = False):
         ]
 
 
-def plot_ellipse(C: np.ndarray, n_pts: int = 20, ax=None, **kwargs):
+def plot_ellipse(
+    C: npt.NDArray[np.float64],
+    n_pts: int = 20,
+    ax: Optional[matplotlib.axes._subplots.AxesSubplot] = None,
+    **kwargs
+) -> None:
     """Plots 2D 1-stdev ellipse according to covariance matrix C"""
     assert C.shape == (2, 2)
     thetas = np.linspace(0, 2 * np.pi, n_pts)

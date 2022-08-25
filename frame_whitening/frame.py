@@ -4,15 +4,17 @@ from scipy.linalg import fractional_matrix_power
 from typing import Tuple, Optional
 
 
-def normalize_frame(W: npt.NDArray[np.float64], axis: int = 0) -> npt.NDArray:
+def normalize_frame(
+    W: npt.NDArray[np.float64], axis: int = 0
+) -> npt.NDArray[np.float64]:
     """Normalize the columns of W to unit length"""
     W0 = W / np.linalg.norm(W, axis=axis, keepdims=True)
     return W0
 
 
 def compute_g_opt(
-        C: npt.NDArray[np.float64], W: npt.NDArray[np.float64]
-        ) -> npt.NDArray[np.float64]:
+    C: npt.NDArray[np.float64], W: npt.NDArray[np.float64]
+) -> npt.NDArray[np.float64]:
     """Compute w using homog representation"""
     G2 = (W.T @ W) ** 2
     s = np.diag(W.T @ C @ W)
@@ -20,8 +22,9 @@ def compute_g_opt(
     return g
 
 
-def get_mercedes_frame(parseval: bool = False, 
-    jitter: bool = False) -> npt.NDArray[np.float64]:
+def get_mercedes_frame(
+    parseval: bool = False, jitter: bool = False
+) -> npt.NDArray[np.float64]:
     """Makes 2D Mercedes Benz frame,
     or equiangular 2D frame with k vectors, and optional added angular jitter, and optionally Parseval"""
     k = 3
@@ -49,8 +52,9 @@ def squared_gram(W: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     return gram**2
 
 
-def frame_distance(W: npt.NDArray[np.float64], C1: npt.NDArray[np.float64],
-                   C2: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+def frame_distance(
+    W: npt.NDArray[np.float64], C1: npt.NDArray[np.float64], C2: npt.NDArray[np.float64]
+) -> npt.NDArray[np.float64]:
     """Computes d(C1, C2) = (w1-w2)' * (G * G) * (w1-w2) quadratic form distance in w-space for given R
     This is equivalent to computing the Frobenius norm between the two covariance matrices.
     """
@@ -65,7 +69,7 @@ def frame_distance(W: npt.NDArray[np.float64], C1: npt.NDArray[np.float64],
     return dist
 
 
-def get_equiangular_3d() -> npt.NDArray:
+def get_equiangular_3d() -> npt.NDArray[np.float64]:
     """Returns six vectors in R3 whose pair-wise angles are equal
     Redmond Existence and construction of real-valued equiangular tight frames (2009) PhD Thesis
     """
@@ -74,14 +78,10 @@ def get_equiangular_3d() -> npt.NDArray:
         [
             [1, 0, 0],
             [1 / np.sqrt(5), 2 / np.sqrt(5), 0],
-            [1 / np.sqrt(5), 0.1 * (5 - np.sqrt(5)),
-             np.sqrt(0.1 * (5 + np.sqrt(5)))],
-            [1 / np.sqrt(5), 0.1 * (5 - np.sqrt(5)), -
-             np.sqrt(0.1 * (5 + np.sqrt(5)))],
-            [1 / np.sqrt(5), 0.1 * (-5 - np.sqrt(5)),
-             np.sqrt(0.1 * (5 - np.sqrt(5)))],
-            [1 / np.sqrt(5), 0.1 * (-5 - np.sqrt(5)), -
-             np.sqrt(0.1 * (5 - np.sqrt(5)))],
+            [1 / np.sqrt(5), 0.1 * (5 - np.sqrt(5)), np.sqrt(0.1 * (5 + np.sqrt(5)))],
+            [1 / np.sqrt(5), 0.1 * (5 - np.sqrt(5)), -np.sqrt(0.1 * (5 + np.sqrt(5)))],
+            [1 / np.sqrt(5), 0.1 * (-5 - np.sqrt(5)), np.sqrt(0.1 * (5 - np.sqrt(5)))],
+            [1 / np.sqrt(5), 0.1 * (-5 - np.sqrt(5)), -np.sqrt(0.1 * (5 - np.sqrt(5)))],
         ]
     ).T  # / np.sqrt(2)
 
@@ -96,8 +96,7 @@ def get_rotation_matrix3d(alpha: float, beta: float, gamma: float) -> npt.NDArra
         ]
     )
     pitch = np.array(
-        [[np.cos(beta), 0, np.sin(beta)], [0, 1, 0],
-         [-np.sin(beta), 0, np.cos(beta)]]
+        [[np.cos(beta), 0, np.sin(beta)], [0, 1, 0], [-np.sin(beta), 0, np.cos(beta)]]
     )
 
     roll = np.array(
@@ -110,12 +109,14 @@ def get_rotation_matrix3d(alpha: float, beta: float, gamma: float) -> npt.NDArra
     return yaw @ pitch @ roll
 
 
-def rot2(theta: float) -> npt.NDArray:
+def rot2(theta: float) -> npt.NDArray[np.float64]:
     return np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
 
 
 def frame_svd(
-    A: npt.NDArray[np.float64], X: Optional[npt.NDArray[np.float64]] = None, Z: Optional[npt.NDArray[np.float64]] = None
+    A: npt.NDArray[np.float64],
+    X: Optional[npt.NDArray[np.float64]] = None,
+    Z: Optional[npt.NDArray[np.float64]] = None,
 ) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Random decomposition of A into two frames and diagonal with all positive entries
     A = X @ diag(y) @ Z.T
@@ -144,9 +145,9 @@ def frame_svd(
 
     # ensure y is all positive by flipping sign of X
     y = np.abs(y)
-    X[:, neg_ind] *= -1.0
+    X[:, neg_ind] *= -1.0  # type: ignore
 
-    return X, y, Z
+    return X, y, Z  # type: ignore
 
 
 def get_grassmannian(
@@ -202,8 +203,7 @@ def get_grassmannian(
         # 1- shrink high inner products
         gg = np.sort(np.abs(G).flatten())
         idx, idy = np.where(
-            (np.abs(G) > gg[int(fract_shrink * (m**2 - m))]
-             ) & (np.abs(G - 1) > 1e-6)
+            (np.abs(G) > gg[int(fract_shrink * (m**2 - m))]) & (np.abs(G - 1) > 1e-6)
         )
         G[idx, idy] *= shrink_fact
 
@@ -220,14 +220,12 @@ def get_grassmannian(
         G = U @ np.diag(s) @ Vh
 
         # 3- normalize cols
-        G = np.diag(1 / np.sqrt(np.diag(G))
-                    ) @ G @ np.diag(1 / np.sqrt(np.diag(G)))
+        G = np.diag(1 / np.sqrt(np.diag(G))) @ G @ np.diag(1 / np.sqrt(np.diag(G)))
 
         # status
         gg = np.sort(np.abs(G).flatten())
         idx, idy = np.where(
-            (np.abs(G) > gg[int(fract_shrink * (m**2 - m))]
-             ) & (np.abs(G - 1) > 1e-6)
+            (np.abs(G) > gg[int(fract_shrink * (m**2 - m))]) & (np.abs(G - 1) > 1e-6)
         )
         GG = np.abs(G[idx, idy])
         g_shape = GG.shape[0]
