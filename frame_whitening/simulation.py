@@ -2,8 +2,8 @@ import numpy as np
 import numpy.typing as npt
 from typing import Tuple, Callable, Optional
 
-from .types import FuncType
-from .stats import sample_x
+from frame_whitening.types import FuncType
+from frame_whitening import stats
 from scipy import optimize
 
 
@@ -143,8 +143,8 @@ def init_g_const(
 def simulate(
     cholesky_list: Tuple[npt.NDArray[np.float64], ...],
     W: npt.NDArray[np.float64],
-    get_y: Callable,
-    get_dg: Callable,
+    get_y: Callable[..., Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]],
+    get_dg: Callable[..., npt.NDArray[np.float64]],
     batch_size: int = 64,
     n_batch: int = 1024,
     lr_g: float = 5e-3,
@@ -188,7 +188,7 @@ def simulate(
     for Lxx in cholesky_list:
         Cxx = Lxx @ Lxx.T
         for _ in range(n_batch):
-            x = sample_x(Lxx, batch_size)  # draw a sample of x
+            x = stats.sample_x(Lxx, batch_size)  # draw a sample of x
 
             y, G = get_y(g, W, x)
             M = np.linalg.inv(W @ G @ W.T)
