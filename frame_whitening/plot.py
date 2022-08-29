@@ -10,8 +10,12 @@ def plot_frame2d(
     assert R.shape[0] == 2 and R.shape[1] > 2
     if ax is None:
         ax = plt
+    for i in range(R.shape[1]):
+        if i > 0 and "label" in kwargs:
+            kwargs.pop("label")
+        ax.plot([0, R[0, i]], [0, R[1, i]], "-o", **kwargs)
 
-    [ax.plot([0, R[0, i]], [0, R[1, i]], "-o", **kwargs) for i in range(R.shape[1])]
+    # [ax.plot([0, R[0, i]], [0, R[1, i]], "-o", **kwargs) for i in range(R.shape[1])]
     x = np.linspace(-2, 2, 10)
     G2 = (R.T @ R) ** 2
     G2 = np.tril(G2, k=-1)
