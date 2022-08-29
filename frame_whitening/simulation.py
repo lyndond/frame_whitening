@@ -44,7 +44,7 @@ def _get_y_pow(
     g: npt.NDArray[np.float64],
     W: npt.NDArray[np.float64],
     x: npt.NDArray[np.float64],
-    alpha: float = 0,
+    alpha: float = 0.0,
 ) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]:
     """Compute steady-state y for a given x and g and alpha
     f(g) = g^{alpha+1}
@@ -58,8 +58,8 @@ def _get_dg_pow(
     g: npt.NDArray[np.float64],
     W: npt.NDArray[np.float64],
     y: npt.NDArray[np.float64],
-    alpha: float = 0,
-    beta: float = 0,
+    alpha: float = 0.0,
+    beta: float = 0.0,
 ) -> npt.NDArray[np.float64]:
     """Compute gradient of objective wrt g when f(g) = g^{alpha+1}."""
     w0 = np.sum(W**2, axis=0)
@@ -82,7 +82,7 @@ def _get_dg_exp(
     g: npt.NDArray[np.float64],
     W: npt.NDArray[np.float64],
     y: npt.NDArray[np.float64],
-    beta: float = 0,
+    beta: float = 0.0,
 ) -> npt.NDArray[np.float64]:
     """Compute gradient of objective wrt g when f(g) = exp(g)."""
     w0 = np.sum(W**2, axis=0)
@@ -170,7 +170,7 @@ def simulate(
     -------
     g_last: Last value of g for each matrix at end of each n_batch.
     g_all: All values of g throughout simulation.
-    errros: Error of Cyy compared to Identity matrix. Computed using trace(|Cyy - I|)/N.
+    errors: Error of Cyy compared to Identity matrix. Computed using trace(|Cyy - I|)/N.
     """
     if seed is not None:
         np.random.seed(seed)

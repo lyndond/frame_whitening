@@ -1,19 +1,17 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
-from typing import Optional
 
 
 def plot_frame2d(
-    R: npt.NDArray[np.float64],
-    ax=None,
-    plot_line: bool = False,
+    R: npt.NDArray[np.float64], ax=None, plot_line: bool = False, **kwargs
 ) -> None:
     """Plots 2D frame vectors, optionally plot the axes along which they lie"""
     assert R.shape[0] == 2 and R.shape[1] > 2
     if ax is None:
         ax = plt
-    [ax.plot([0, R[0, i]], [0, R[1, i]], "k-o", linewidth=2) for i in range(R.shape[1])]
+
+    [ax.plot([0, R[0, i]], [0, R[1, i]], "-o", **kwargs) for i in range(R.shape[1])]
     x = np.linspace(-2, 2, 10)
     G2 = (R.T @ R) ** 2
     G2 = np.tril(G2, k=-1)
@@ -27,10 +25,7 @@ def plot_frame2d(
 
 
 def plot_ellipse(
-    C: npt.NDArray[np.float64],
-    n_pts: int = 20,
-    ax = None,
-    **kwargs
+    C: npt.NDArray[np.float64], n_pts: int = 20, ax=None, **kwargs
 ) -> None:
     """Plots 2D 1-stdev ellipse according to covariance matrix C"""
     assert C.shape == (2, 2)
