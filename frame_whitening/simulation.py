@@ -1,6 +1,6 @@
 import numpy as np
 import numpy.typing as npt
-from typing import Tuple, Callable, Optional
+from typing import Tuple, Callable, Optional, List
 
 from frame_whitening.types import FuncType
 from frame_whitening import stats
@@ -142,7 +142,7 @@ def init_g_const(
 
 
 def simulate(
-    cholesky_list: Tuple[npt.NDArray[np.float64], ...],
+    cholesky_list: List[npt.NDArray[np.float64]],
     W: npt.NDArray[np.float64],
     get_y: Callable[..., Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64]]],
     get_dg: Callable[..., npt.NDArray[np.float64]],
