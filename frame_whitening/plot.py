@@ -4,27 +4,27 @@ import numpy.typing as npt
 
 
 def plot_frame2d(
-    R: npt.NDArray[np.float64], ax=None, plot_line: bool = False, **kwargs
+    W: npt.NDArray[np.float64], ax=None, plot_line: bool = False, **kwargs
 ) -> None:
     """Plots 2D frame vectors, optionally plot the axes along which they lie"""
-    assert R.shape[0] == 2 and R.shape[1] > 2
+    assert W.shape[0] == 2, "R must be in R2"
+    _, n_vectors = W.shape
     if ax is None:
         ax = plt
-    for i in range(R.shape[1]):
+    for i in range(n_vectors):
         if i > 0 and "label" in kwargs:
             kwargs.pop("label")
-        ax.plot([0, R[0, i]], [0, R[1, i]], "-o", **kwargs)
+        ax.plot([0, W[0, i]], [0, W[1, i]], "-o", **kwargs)
 
-    # [ax.plot([0, R[0, i]], [0, R[1, i]], "-o", **kwargs) for i in range(R.shape[1])]
     x = np.linspace(-2, 2, 10)
-    G2 = (R.T @ R) ** 2
+    G2 = (W.T @ W) ** 2
     G2 = np.tril(G2, k=-1)
     G2[np.isclose(G2, 0)] = np.inf
     ind = np.unravel_index(G2.argmin(), G2.shape)
-    if plot_line:
+    if plot_line:  # plot axis along which the vectors lie
         [
-            ax.plot(x, (R[1, i] / R[0, i]) * x, "--", color="r" if i in ind else "k")
-            for i in range(R.shape[1])
+            ax.plot(x, (W[1, i] / W[0, i]) * x, "--", color="r" if i in ind else "k")
+            for i in range(W.shape[1])
         ]
 
 

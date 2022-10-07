@@ -15,6 +15,7 @@ typings/
 slurm/
 outputs/
 deprecated/
+local/
 *.png
 *.pdf
 !assets/*.png
