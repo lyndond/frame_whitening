@@ -16,7 +16,12 @@ def simulate(
     online: bool = True,
     clamp: bool = False,
     seed: Optional[float] = None,
-) -> Tuple[npt.NDArray[np.float64], npt.NDArray[np.float64], npt.NDArray[np.float64]]:
+) -> Tuple[
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+    npt.NDArray[np.float64],
+]:
     """Simulate data from a given model."""
     if seed is not None:
         np.random.seed(seed)
