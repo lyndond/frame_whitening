@@ -13,6 +13,7 @@ setup(
         "seaborn",
         "scipy",
         "tqdm",
-	"submitit",
+        "scikit-learn",
+        "jupyter",
     ],
 )
