@@ -35,16 +35,16 @@ def simulate(
     errors = []
     variances_all = []
 
-    # run simulation with minibatches
     Ixx = np.eye(N)
     for Lxx in cholesky_list:
         Cxx = Lxx @ Lxx.T
         for _ in range(n_batch):
-            G = np.diag(g)
-            WGW = W @ G @ W.T
+            # G = np.diag(g)
+            # WGW = W @ G @ W.T
+            WGW = W @ (g[:, None] * W.T)  # equiv to W@diag(g)@W.T
             M = np.linalg.inv(Ixx + WGW)
 
-            if online:
+            if online: # run simulation with minibatches
                 x = stats.sample_x(Lxx, batch_size)  # draw a sample of x
                 y = np.linalg.inv(Ixx + WGW) @ x
                 z = W.T @ y
@@ -52,9 +52,12 @@ def simulate(
                 dg = z**2 - 1
                 g = g + lr_g * np.mean(dg, -1)  # gradient descent
             else:
+                # compute diag(W.T@Cyy@W) efficiently
                 Cyy = M @ Cxx @ M.T
-                Czz = W.T @ Cyy @ W
-                variances = np.diag(Czz)
+                tmp = Cyy @ W
+                # Czz = W.T @ Cyy @ W
+                # variances = np.diag(Czz)
+                variances = np.array([w @ t for w, t in zip(W.T, tmp.T)])
                 dg = variances - 1
                 g = g + lr_g * dg  # gradient descent
 

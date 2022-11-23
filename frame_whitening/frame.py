@@ -1,7 +1,9 @@
+import itertools
+from typing import Tuple, Optional
+
 import numpy as np
 import numpy.typing as npt
 from scipy.linalg import fractional_matrix_power
-from typing import Tuple, Optional
 
 
 def normalize_frame(
@@ -148,6 +150,61 @@ def frame_svd(
     X[:, neg_ind] *= -1.0  # type: ignore
 
     return X, y, Z  # type: ignore
+
+
+def get_conv_frame(n, m, h, w) -> npt.NDArray[np.float64]:
+    """Returns a specific convolutional frame that connects all pairs within a window.
+
+    Assumes the nxm image is vectorized, and the filter/neighbourhood size is hxw.
+
+    Parameters
+    ----------
+    n: Height of image.
+    m: Width of image.
+    h: Height of convolutional filter.
+    w: Width of convolutional filter.
+
+    Returns
+    -------
+    W: Convolutional frame.
+    """
+
+    nm = n * m
+    hw = h * w
+    
+    # singly-connected interneurons
+    WI = np.eye(nm)
+    
+    # doubly-connected (paired) interneurons
+    idx_set = set()
+    WP = []
+    normalize = lambda x: x / np.linalg.norm(x)
+
+    all_indices = list(itertools.product(range(n), range(m)))
+    for i, j in all_indices:
+        for k, l in all_indices:
+
+            # get flat indices
+            ij_flat = np.ravel_multi_index((i, j), (n, m))
+            kl_flat = np.ravel_multi_index((k, l), (n, m))
+            if (
+                (i, j) != (k, l) and
+                (ij_flat, kl_flat) not in idx_set and
+                (kl_flat, ij_flat) not in idx_set and
+                np.abs(i - k) < h and
+                np.abs(j - l) < w
+            ):
+                idx_set.add((ij_flat, kl_flat))
+                # pair (i, j) and (k, l) via flattened indices, and normalize
+                wp = np.zeros(nm)
+                wp[ij_flat] = 1
+                wp[kl_flat] = 1
+                WP.append(normalize(wp))
+
+    WP = np.stack(WP, 0)
+    
+    W = np.concatenate([WI, WP], 0).T
+    return W
 
 
 def get_grassmannian(
