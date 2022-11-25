@@ -1,167 +1,133 @@
+import array
 import os
 import os.path as op
-import array
+from typing import Optional,Tuple
+
+import matplotlib.pyplot as plt
 import numpy as np
-from torch.utils.data import DataLoader, Dataset
-import torchvision
-from torchvision import transforms
-import torch
-from pyrtools.tools.convolutions import blurDn
-
-### TRANSFORMS
-class ToFloatTensor(object):
-    """Convert ndarrays in sample to Tensors."""
-
-    def __call__(self, sample):
-        # turn to Size([C=1, H, W]) float tensor
-        image = torch.as_tensor(sample).float().view(1, *sample.shape)
-        return image
-
-class ToNumpy(object):
-    """Convert Tensor in sample to ndarray."""
-
-    def __call__(self, sample):
-        # turn to Size([H, W]) numpy array
-        return sample.squeeze().numpy()
-
-class Whiten(object):
-    """Applies Olshausen and Field Style Whitening to an Image"""
-
-    def __init__(self, size):
-        super().__init__()
-        self.size = size
-        self.whiten_mat = self.init_whiten_mat(self.size)
-
-    def __call__(self, img):
-       # center and scale img
-       mu = img.mean()
-       std = img.std()
-       img = (img - mu) / std
-
-       # fourier transform
-       im_fft = np.fft.fft2(img) 
-       im_fft = np.fft.fftshift(im_fft)
-
-       # spectral whtien
-       whitened = self.whiten_mat * im_fft
-
-       # invert
-       img_whitened = np.fft.ifft2(np.fft.ifftshift(whitened))
-
-       return img_whitened
-
-    def init_whiten_mat(self, crop_size):
-        # cutoff frequency 
-        f_0 = 0.4 * crop_size
-        
-        # linear ramp (inverts 1/f)
-        r_x = np.arange(-1.*crop_size/2., crop_size/2., 1.)
-        r_y = np.arange(-1.*crop_size/2., crop_size/2., 1.)
-
-        f_x, f_y = np.meshgrid(r_x, r_y)
-
-        # filter is linear ramp * lowpass at cutoff frequency
-        rho = (f_x**2 + f_y**2)**0.5
-        filt = rho * np.exp(-1.*(rho/f_0)**4)
-
-        return filt
-
-class Standardize(object):
-    """Standardize image to have given mean and variance"""
-
-    def __init__(self, mu, sigma):
-        super().__init__()
-        self.mu = mu
-        self.sigma = sigma
-
-    def __call__(self, img):
-        img_0_1 = (img - img.mean()) / img.std()
-
-        return (img_0_1 * self.sigma) + self.mu
+import numpy.typing as npt
 
 
-### DATASET AND DATALOADER
-class VanHaterenDataset(Dataset):
-    def __init__(self,
-                 imc=True,
-                 whiten=True,
-                 n_blur=0,
-                 transform: torchvision.transforms = None,
-                 n_ims: int = 100):
+def load_image(
+    data_dir: str = "/mnt/home/tyerxa/ceph/datasets/datasets/vanhateren_imc", 
+    crop_size: int = 256, 
+    rng: Optional[np.random.Generator] = None,
+    ) -> npt.NDArray[np.uint16]:
+    """Loads randomly cropped img from van hateren dataset."""
 
-        # choose dataset
-        if imc:
-            root_dir = '/mnt/home/tyerxa/ceph/datasets/datasets/vanhateren_imc'
-        else:
-            root_dir = '/mnt/home/tyerxa/ceph/datasets/datasets/vanhateren_iml'
+    if rng is None:
+        rng = np.random.default_rng()
 
-        self.data_dir = op.join(root_dir)
-        self.filenames = tuple(sorted(os.listdir(root_dir)))
-        self.filenames = self.filenames[:n_ims]
-        self.transform = transform
-        self.all_idx = sorted([int(s[3:8]) for s in self.filenames])
-        self.n_ims = n_ims
-        self.whiten = whiten
-        if self.whiten:
-            self.Whitener = Whiten(1024)
-        self.n_blur = n_blur
+    files = sorted(os.listdir(data_dir))
+    n_images = 10
+    rand_idx = rng.choice(range(len(files)), n_images, replace=False)
 
-        self.loaded_dict = {}
+    filename = files[0]
+    with open(op.join(data_dir, filename), 'rb') as handle:
+        s = handle.read()
+        arr = array.array('H', s)
+        arr.byteswap()
+    img = np.array(arr, dtype='uint16').reshape(1024, 1536)
+    H, W = img.shape
 
-    def _load_image(self, idx):
-
-        filename = self.filenames[idx]
-        img_idx = int(filename[3:8])
-
-        if idx in self.loaded_dict.keys():
-            return self.loaded_dict[idx], img_idx
-
-        with open(op.join(self.data_dir, filename), 'rb') as handle:
-            s = handle.read()
-            arr = array.array('H', s)
-            arr.byteswap()
-        img = np.array(arr, dtype='int16').reshape(1024, 1536)
-        img = img[:, :1024] # taking this to make images square
-
-        for blur_step in range(self.n_blur):
-            blurDn(img)
-
-        if self.whiten:
-            img = self.Whitener(img)
-
-        for blur_step in range(self.n_blur):
-            img = blurDn(img)
-
-        self.loaded_dict[idx] = img
-
-        return img, img_idx
-
-    def __len__(self):
-        return self.n_ims
-
-    def __getitem__(self, idx):
-        img, idx = self._load_image(idx)
-        return self.transform(img), idx
+    rand_h = rng.integers(0, H-crop_size, 1)[0]
+    rand_w = rng.integers(0, W-crop_size, 1)[0]
+    img = img[rand_h:rand_h + crop_size, rand_w:rand_w + crop_size]
+    return img
 
 
-class VanHaterenPatchDataLoader(DataLoader):
-    def __init__(
-        self,
-        transform=None,
-        whiten=True,
-        n_blur=0,
-        imc=True,
-        **kwargs
-    ):
-        self.transform = transform
-        if transform is None:
-            self.transform = transforms.Compose([ToFloatTensor() 
-                ])
-
-        dataset = VanHaterenDataset(whiten=whiten, n_blur=n_blur, imc=imc, transform=self.transform)
-
-        super().__init__(dataset, shuffle=False, **kwargs)
+def random_walk(n_steps: int, sigma: float = 1.0) -> Tuple[npt.NDArray[np.int], npt.NDArray[np.int]]:
+    """2D Gaussian random walk."""
+    x = np.random.normal(0, sigma, n_steps)
+    y = np.random.normal(0, sigma, n_steps)
+    return np.cumsum(x).astype(int), np.cumsum(y).astype(int)
 
 
-if __name__ == '__main__':
-    loader = VanHaterenPatchDataLoader(batch_size=2, shuffle=False)
+def get_patches(
+    img: npt.NDArray, 
+    walk_h: npt.NDArray[np.int], 
+    walk_w: npt.NDArray[np.int]
+    ) -> List[npt.NDArray]:
+    """Get patches within a context."""
+    all_images = []
+    for di, dj in zip(walk_h, walk_w):
+        all_images.append(img[di:di+h, dj:dj+w])
+    return all_images
+
+
+def get_contexts(
+    img: npt.NDArray, 
+    h: int, 
+    w: int, 
+    n_contexts: int, 
+    sigma: float, 
+    n_steps: int, 
+    pad_factor: int = 1
+    ) -> Tuple[npt.NDArray, npt.NDArray[np.int]]:
+    pad_h, pad_w = pad_factor * h, pad_factor * w
+
+    all_contexts = []
+    walk_coords = []
+
+    for _ in range(n_contexts):
+        i, j = np.random.randint(pad_h, img_h-pad_w), np.random.randint(pad_h, img_w-pad_w)
+        walk_h, walk_w = random_walk(n_steps, sigma)
+        walk_h = np.clip(walk_h+i, 0+h, img_h-h)
+        walk_w = np.clip(walk_w+j, 0+w, img_w-w)
+        all_contexts.append(get_patches(img, walk_h, walk_w))
+        walk_coords.append(np.stack([walk_h, walk_w], axis=1))
+
+    return np.array(all_contexts), walk_coords
+
+
+# sample 5 images without replacement from all_images and plot
+def add_subplot_border(ax, width=1, color=None ):
+    """from https://stackoverflow.com/questions/45441909/how-to-add-a-fixed-width-border-to-subplot"""
+
+    fig = ax.get_figure()
+
+    # Convert bottom-left and top-right to display coordinates
+    x0, y0 = ax.transAxes.transform((0, 0))
+    x1, y1 = ax.transAxes.transform((1, 1))
+
+    # Convert back to Axes coordinates
+    x0, y0 = ax.transAxes.inverted().transform((x0, y0))
+    x1, y1 = ax.transAxes.inverted().transform((x1, y1))
+
+    rect = plt.Rectangle(
+        (x0, y0), x1-x0, y1-y0,
+        color=color,
+        transform=ax.transAxes,
+        zorder=-1,
+        lw=2*width+1,
+        fill=None,
+    )
+    fig.patches.append(rect)
+
+
+def plot_context_samples(all_contexts: npt.NDArray, n_samples: int):
+    n_contexts = all_contexts.shape[0]
+    sampled_idx = np.random.choice(n_steps, n_samples, replace=False)
+    fig, ax = plt.subplots(n_contexts, n_samples, figsize=(n_samples, 4))
+    for ctx in range(n_contexts):
+        VMIN, VMAX = np.min(all_contexts[ctx]), np.max(all_contexts[ctx])
+        for i in range(n_samples):
+            ax[ctx, i].imshow(all_contexts[ctx][sampled_idx[i]], cmap="bone", vmin=VMIN, vmax=VMAX)
+            add_subplot_border(ax[ctx, i], width=3, color=cols[ctx])
+            ax[ctx, i].axis("off")
+
+    fig.tight_layout()
+
+
+def plot_patch_stats(all_images: npt.NDArray) -> None:
+    fig, ax = plt.subplots(1, 2, figsize=(10, 4), sharex="all", sharey="all")
+
+    im = ax[0].imshow(np.mean(all_images, 0), cmap="bone")
+    plt.colorbar(im)
+    ax[0].set(title="Cross-patch mean")
+
+    im = ax[1].imshow(np.var(all_images, 0), cmap="bone")
+    ax[1].set(title="Cross-patch variance", xticklabels=[], yticklabels=[])
+    plt.colorbar(im)
+    fig.tight_layout()
+
