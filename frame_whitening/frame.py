@@ -152,7 +152,7 @@ def frame_svd(
     return X, y, Z  # type: ignore
 
 
-def get_conv_frame(n, m, h, w) -> npt.NDArray[np.float64]:
+def get_conv_frame(n: int, m: int, h: int, w: int) -> npt.NDArray[np.float64]:
     """Returns a specific convolutional frame that connects all pairs within a window.
 
     Assumes the nxm image is vectorized, and the filter/neighbourhood size is hxw.
@@ -170,7 +170,7 @@ def get_conv_frame(n, m, h, w) -> npt.NDArray[np.float64]:
     """
 
     nm = n * m
-    hw = h * w
+    # hw = h * w
     
     # singly-connected interneurons
     WI = np.eye(nm)
@@ -216,7 +216,9 @@ def get_grassmannian(
     A_init: Optional[npt.NDArray[np.float64]] = None,
     expand: bool = False,
 ):
-    """Sample a tight frame with minimal mutual coherence, ie. the angle
+    """
+    TODO(lyndo): replace this with new version.
+    Sample a tight frame with minimal mutual coherence, ie. the angle
     between any pair of column is the same, and the smallest it can be.
 
     Approximate iterative algorithm to sample grassmannian mtx (tightest frame,
