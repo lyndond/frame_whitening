@@ -9,32 +9,35 @@ import numpy.typing as npt
 import seaborn as sns
 
 
-def load_image(
+def load_images(
     data_dir: str = "/mnt/home/tyerxa/ceph/datasets/datasets/vanhateren_imc", 
+    n_images: int = 1,
     crop_size: int = 256, 
     rng: Optional[np.random.Generator] = None,
-    ) -> npt.NDArray[np.uint16]:
+    ) -> List[npt.NDArray[np.uint16]]:
     """Loads randomly cropped img from van hateren dataset."""
 
     if rng is None:
         rng = np.random.default_rng()
 
     files = sorted(os.listdir(data_dir))
-    n_images = 10
     rand_idx = rng.choice(range(len(files)), n_images, replace=False)
 
-    filename = files[0]
-    with open(op.join(data_dir, filename), 'rb') as handle:
-        s = handle.read()
-        arr = array.array('H', s)
-        arr.byteswap()
-    img = np.array(arr, dtype='uint16').reshape(1024, 1536)
-    H, W = img.shape
+    images = []
+    for i in rand_idx:
+        filename = files[i]
+        with open(op.join(data_dir, filename), 'rb') as handle:
+            s = handle.read()
+            arr = array.array('H', s)
+            arr.byteswap()
+        img = np.array(arr, dtype='uint16').reshape(1024, 1536)
+        H, W = img.shape
 
-    rand_h = rng.integers(0, H-crop_size, 1)[0]
-    rand_w = rng.integers(0, W-crop_size, 1)[0]
-    img = img[rand_h:rand_h + crop_size, rand_w:rand_w + crop_size]
-    return img
+        rand_h = rng.integers(0, H-crop_size, 1)[0]
+        rand_w = rng.integers(0, W-crop_size, 1)[0]
+        img = img[rand_h:rand_h + crop_size, rand_w:rand_w + crop_size]
+        images.append(img)
+    return images
 
 
 def random_walk(
@@ -71,8 +74,13 @@ def get_contexts(
     n_contexts: int, 
     sigma: float, 
     n_steps: int, 
-    pad_factor: int = 1
+    pad_factor: int = 1,
+    rng: Optional[np.random.Generator] = None,
     ) -> Tuple[npt.NDArray, List[npt.NDArray[np.int64]]]:
+
+    if rng is None:
+        rng = np.random.default_rng()
+
     img_h, img_w = img.shape
     pad_h, pad_w = pad_factor * patch_h, pad_factor * patch_w
 
@@ -80,8 +88,9 @@ def get_contexts(
     walk_coords = []
 
     for _ in range(n_contexts):
-        i, j = np.random.randint(pad_h, img_h-pad_w), np.random.randint(pad_h, img_w-pad_w)
-        walk_h, walk_w = random_walk(n_steps, sigma)
+        i = rng.integers(pad_h, img_h-pad_w, 1)[0]
+        j = rng.integers(pad_h, img_w-pad_w, 1)[0]
+        walk_h, walk_w = random_walk(n_steps, sigma, rng)
         walk_h = np.clip(walk_h+i, 0+patch_h, img_h-patch_h)
         walk_w = np.clip(walk_w+j, 0+patch_w, img_w-patch_w)
         all_contexts.append(get_patches(img, patch_h, patch_w, walk_h, walk_w))
