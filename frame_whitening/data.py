@@ -127,10 +127,11 @@ def add_subplot_border(ax, width=1, color=None ):
 def plot_context_samples(
     all_contexts: npt.NDArray, 
     n_samples: int, 
+    cmap: str = "gray",
     palette: str = "Set1", 
     plot_border: bool = True,
     rng: Optional[np.random.Generator] = None
-    ) -> None:
+    ):
     if rng is None:
         rng = np.random.default_rng()
     n_contexts, n_steps, _, _ = all_contexts.shape
@@ -142,13 +143,15 @@ def plot_context_samples(
         VMIN, VMAX = np.min(all_contexts[ctx]), np.max(all_contexts[ctx])
 
         for i in range(n_samples):
-            ax[ctx, i].imshow(all_contexts[ctx][sampled_idx[i]], cmap="bone", vmin=VMIN, vmax=VMAX)
+            ax[ctx, i].imshow(all_contexts[ctx][sampled_idx[i]], cmap=cmap, vmin=VMIN, vmax=VMAX)
 
             if plot_border:
                 add_subplot_border(ax[ctx, i], width=3, color=cols[ctx])
             ax[ctx, i].axis("off")
 
     fig.tight_layout()
+
+    return fig, ax
 
 
 def plot_patch_stats(all_images: npt.NDArray) -> None:
