@@ -128,6 +128,7 @@ def plot_context_samples(
     all_contexts: npt.NDArray, 
     n_samples: int, 
     palette: str = "Set1", 
+    plot_border: bool = True,
     rng: Optional[np.random.Generator] = None
     ) -> None:
     if rng is None:
@@ -142,7 +143,9 @@ def plot_context_samples(
 
         for i in range(n_samples):
             ax[ctx, i].imshow(all_contexts[ctx][sampled_idx[i]], cmap="bone", vmin=VMIN, vmax=VMAX)
-            add_subplot_border(ax[ctx, i], width=3, color=cols[ctx])
+
+            if plot_border:
+                add_subplot_border(ax[ctx, i], width=3, color=cols[ctx])
             ax[ctx, i].axis("off")
 
     fig.tight_layout()

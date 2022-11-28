@@ -15,6 +15,8 @@ def simulate(
     g0: Optional[npt.NDArray[np.float64]] = None,
     online: bool = True,
     clamp: bool = False,
+    alpha: float = 1.,
+    save_every: int = 1,
     seed: Optional[float] = None,
 ) -> Tuple[
     npt.NDArray[np.float64],
@@ -25,6 +27,7 @@ def simulate(
     """Simulate data from a given model."""
     if seed is not None:
         np.random.seed(seed)
+    assert alpha >= 0., "alpha must be non-negative"
 
     # initialize random set of gains g
     N, K = W.shape
@@ -38,11 +41,11 @@ def simulate(
     Ixx = np.eye(N)
     for Lxx in cholesky_list:
         Cxx = Lxx @ Lxx.T
-        for _ in range(n_batch):
+        for step in range(n_batch):
             # G = np.diag(g)
             # WGW = W @ G @ W.T
             WGW = W @ (g[:, None] * W.T)  # equiv to W@diag(g)@W.T
-            M = np.linalg.inv(Ixx + WGW)
+            M = np.linalg.inv(alpha*Ixx + WGW)
 
             if online: # run simulation with minibatches
                 x = stats.sample_x(Lxx, batch_size)  # draw a sample of x
@@ -63,9 +66,10 @@ def simulate(
 
             # project g to be positive
             g = np.clip(g, 0, np.inf) if clamp else g
-            error = np.linalg.norm(M @ Cxx @ M.T - Ixx) ** 2 / N**2
-            errors.append(error)
-            g_all.append(g)
+            if step % save_every == 0:
+                error = np.linalg.norm(M @ Cxx @ M.T - Ixx) ** 2 / N**2
+                errors.append(error)
+                g_all.append(g)
         variances_all.append(variances)
         g_last.append(g)
 
