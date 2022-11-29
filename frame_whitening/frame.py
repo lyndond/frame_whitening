@@ -168,6 +168,9 @@ def get_conv_frame(n: int, m: int, h: int, w: int) -> npt.NDArray[np.float64]:
     -------
     W: Convolutional frame.
     """
+    assert n >= 1 and m >= 1
+    assert n >= h and m >= w
+
 
     nm = n * m
     # hw = h * w

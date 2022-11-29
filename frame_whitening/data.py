@@ -130,7 +130,8 @@ def plot_context_samples(
     cmap: str = "gray",
     palette: str = "Set1", 
     plot_border: bool = True,
-    rng: Optional[np.random.Generator] = None
+    rng: Optional[np.random.Generator] = None,
+    dpi: Optional[int] = None,
     ):
     if rng is None:
         rng = np.random.default_rng()
@@ -138,7 +139,7 @@ def plot_context_samples(
     sampled_idx = rng.choice(n_steps, n_samples, replace=False)
 
     cols = sns.color_palette(palette, n_contexts)
-    fig, ax = plt.subplots(n_contexts, n_samples, figsize=(n_samples, 4))
+    fig, ax = plt.subplots(n_contexts, n_samples, figsize=(n_samples, 4), dpi=dpi)
     for ctx in range(n_contexts):
         VMIN, VMAX = np.min(all_contexts[ctx]), np.max(all_contexts[ctx])
 
