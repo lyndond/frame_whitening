@@ -1,7 +1,9 @@
+from typing import Tuple, Optional, List
+
 import numpy as np
 import numpy.typing as npt
-from typing import Tuple, Optional, List
 import scipy as sp
+from tqdm import tqdm
 
 from frame_whitening import stats
 
@@ -38,10 +40,16 @@ def simulate(
     errors = []
     variances_all = []
 
+    n_contexts = len(cholesky_list)
+    total_steps = n_batch * n_contexts
+
+    pbar = tqdm(total=total_steps)
+
     Ixx = np.eye(N)
     for Lxx in cholesky_list:
         Cxx = Lxx @ Lxx.T
         for step in range(n_batch):
+            pbar.update(1)
             # G = np.diag(g)
             # WGW = W @ G @ W.T
             WGW = W @ (g[:, None] * W.T)  # equiv to W@diag(g)@W.T
