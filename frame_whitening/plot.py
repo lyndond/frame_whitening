@@ -33,12 +33,12 @@ def plot_frame_axes2d(W: npt.NDArray[np.float64], ax=None, **kwargs):
 
 
 def plot_ellipse(
-    C: npt.NDArray[np.float64], n_pts: int = 20, ax=None, **kwargs
+    C: npt.NDArray[np.float64], n_pts: int = 20, ax=None, stdev: float =2., **kwargs
 ) -> None:
     """Plots 2D 1-stdev ellipse according to covariance matrix C"""
     assert C.shape == (2, 2)
     thetas = np.linspace(0, 2 * np.pi, n_pts)
-    dots = np.stack([np.cos(thetas), np.sin(thetas)]) * 2
+    dots = np.stack([np.cos(thetas), np.sin(thetas)]) * stdev
     E, V = np.linalg.eigh(C)
     ellipse = V @ np.diag(np.sqrt(E)) @ dots
     if ax is None:
