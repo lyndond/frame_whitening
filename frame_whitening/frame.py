@@ -198,7 +198,7 @@ def get_rand_untf(
     for i in range(n-1):
         if atom_norms[i] != 1:  # do not normalize if already normalized
             s1 = np.sign(atom_norms[i] - 1)
-            j = i+1
+            j = i + 1
             while np.sign(atom_norms[j]-1) == s1:  # find atom w norm on other side of 1
                 j = j + 1
 
@@ -206,22 +206,22 @@ def get_rand_untf(
             an1 = atom_norms[i]
             an2 = atom_norms[j]
             cp = D[:, i].T @ D[:, j]
-            t = (cp + np.sign(cp)*np.sqrt(cp*cp - (an1-1)*(an2-1))) / (an1-1)
+            t = (cp + np.sign(cp)*np.sqrt(cp*cp - (an1-1)*(an2-1))) / (an2-1)
             # compute rot
             c = 1 / np.sqrt(1+t*t)
             s = t*c
             # new atoms and updated norm
             D[:, [i, j]] = D[:, [i, j]] @ np.array([[c, s], [-s, c]])
-            atom_norms[j] = an1+an2 - 1
+            atom_norms[j] = an1 + an2 - 1
 
-    D = normalize_frame(D)
     return D
 
 
 def get_grassmannian(
     m: int, 
     n: int, 
-    rng: Optional[np.random.Generator] = None
+    rng: Optional[np.random.Generator] = None,
+    method: str = "highs",
 ) -> Tuple[npt.NDArray[np.float64], List[float]]:
     """Generates an m x n Grassmannian frame."""
     if rng is None:
@@ -244,7 +244,7 @@ def get_grassmannian(
             b0 = np.ones((2 * (n-1)))
 
             # solve linear program x = argmin_x y^T x s.t. W2 @ x <= 1
-            x = scipy.optimize.linprog(-y, A_ub=W2, b_ub=b0)
+            x = scipy.optimize.linprog(-y, A_ub=W2, b_ub=b0, method=method)
             x = x.x
             F[:,k] = x / np.linalg.norm(x)
         
