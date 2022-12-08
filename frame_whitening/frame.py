@@ -179,11 +179,18 @@ def get_conv_frame(n: int, m: int, h: int, w: int) -> npt.NDArray[np.float64]:
     return W
 
 
-def get_rand_untf(m: int, n: int) -> npt.NDArray[np.float64]:
+def get_rand_untf(
+    m: int, 
+    n: int,
+    rng: Optional[np.random.Generator] = None,
+) -> npt.NDArray[np.float64]:
     """Generate random unit norm tight frame of size mxn."""
 
+    if rng is None:
+        rng = np.random.default_rng()
+
     # generate random tight frame
-    D = np.random.randn(m, n)
+    D = rng.standard_normal((m, n))
     Q, _ = np.linalg.qr(D.T)
     D = Q.T * np.sqrt(n/m)  # rows have correct norm
 
@@ -206,19 +213,27 @@ def get_rand_untf(m: int, n: int) -> npt.NDArray[np.float64]:
             # new atoms and updated norm
             D[:, [i, j]] = D[:, [i, j]] @ np.array([[c, s], [-s, c]])
             atom_norms[j] = an1+an2 - 1
-    
+
+    D = normalize_frame(D)
     return D
 
 
-def get_grassmannian(m: int, n: int) -> Tuple[npt.NDArray[np.float64], List[float]]:
+def get_grassmannian(
+    m: int, 
+    n: int, 
+    rng: Optional[np.random.Generator] = None
+) -> Tuple[npt.NDArray[np.float64], List[float]]:
     """Generates an m x n Grassmannian frame."""
-    F = get_rand_untf(m, n)
+    if rng is None:
+        rng = np.random.default_rng()
+
+    F = get_rand_untf(m, n, rng)
 
     obj = lambda M: np.max(np.abs(M.T @ M - np.eye(n)))
     obj_coh = []
     obj_coh.append(obj(F))
 
-    for iter in range(100):
+    for _ in range(100):
         tmp = obj(F)
         for k in range(n):
             ind = [i for i in range(n) if i != k]
@@ -226,16 +241,16 @@ def get_grassmannian(m: int, n: int) -> Tuple[npt.NDArray[np.float64], List[floa
             W = F[:, ind]
             y = F[:, k]
             W2 = np.concatenate((W.T, -W.T), axis=0)
-            b0 = np.ones((2*(n-1)))
+            b0 = np.ones((2 * (n-1)))
 
             # solve linear program x = argmin_x y^T x s.t. W2 @ x <= 1
             x = scipy.optimize.linprog(-y, A_ub=W2, b_ub=b0)
             x = x.x
-            F[:,k] = x/np.linalg.norm(x)
+            F[:,k] = x / np.linalg.norm(x)
         
         tmp1 = obj(F)
 
-        if np.abs(tmp-tmp1)/np.abs(tmp) < 1E-3:
+        if np.abs(tmp-tmp1) / np.abs(tmp) < 1E-3:
             break
         obj_coh.append(tmp1)
     return F, obj_coh

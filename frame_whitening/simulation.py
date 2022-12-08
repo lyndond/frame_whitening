@@ -1,3 +1,4 @@
+from collections.abc import Sequence
 from typing import Tuple, Optional, List
 
 import numpy as np
@@ -8,8 +9,8 @@ from tqdm import tqdm
 from frame_whitening import stats
 
 
-def simulate(
-    cholesky_list: List[npt.NDArray[np.float64]],
+def adapt_covariance(
+    Cxx_list: Sequence[npt.NDArray[np.float64]],
     W: npt.NDArray[np.float64],
     batch_size: int = 64,
     n_batch: int = 1024,
@@ -20,13 +21,41 @@ def simulate(
     alpha: float = 1.,
     save_every: int = 1,
     seed: Optional[float] = None,
+    verbose: bool = True,
 ) -> Tuple[
     npt.NDArray[np.float64],
     npt.NDArray[np.float64],
     npt.NDArray[np.float64],
     npt.NDArray[np.float64],
 ]:
-    """Simulate data from a given model."""
+    """Adapt the gains g to whiten the data with covariance matrix Cxx. 
+
+    In offline mode, the covariance matrix is whitened directly. In online mode, its 
+    Cholesky factor is computed, and drawn samples are used to whiten the data.
+
+    Parameters
+    ----------
+    Cxx_list : Tuple or List of (N, N) covariances, with length `n_contexts`.
+    W : (N, K) frame.
+    batch_size : Size of batches to draw. Only valid in online mode.
+    n_batch : Number of batches/steps run algorithm. Valid for both online and offline.
+    lr_g : Learning rate (step size) for gains gradient ascent.
+    g0 : Initial gains. If None, use ones.
+    online : If True, run in online mode (True). If False, run in offline mode.
+    clamp : If True, clamp gains to be non-negative, i.e. projected gradient ascent.
+    alpha : Constant multiplier for Identity leak term in y dynamics. 
+    save_every : Save gains, errors, etc. every `save_every` steps.
+    seed: Random seed. Only valid in online mode when samples are being drawn.
+    verbose: If True, show progress bar. 
+
+    Returns
+    -------
+    g_last : (n_contexts, K) gains. One set per Cxx in Cxx_list.
+    g_all : (n_batch * n_contexts, K) gains at each step.
+    errors : (n_batch * n_contexts,) errors at each step.
+    variances : (n_batch * n_contexts, K) variances at each step.
+    """
+
     if seed is not None:
         np.random.seed(seed)
     assert alpha >= 0., "alpha must be non-negative"
@@ -40,18 +69,20 @@ def simulate(
     errors = []
     variances_all = []
 
-    n_contexts = len(cholesky_list)
+    n_contexts = len(Cxx_list)
     total_steps = n_batch * n_contexts
 
-    pbar = tqdm(total=total_steps)
+    if verbose:
+        pbar = tqdm(total=total_steps)
 
     Ixx = np.eye(N)
-    for Lxx in cholesky_list:
-        Cxx = Lxx @ Lxx.T
+    for Cxx in Cxx_list:
+        if online:
+            Lxx = np.linalg.cholesky(Cxx)
         for step in range(n_batch):
-            pbar.update(1)
-            # G = np.diag(g)
-            # WGW = W @ G @ W.T
+            if verbose:
+                pbar.update(1)
+
             WGW = W @ (g[:, None] * W.T)  # equiv to W@diag(g)@W.T
             M = np.linalg.inv(alpha*Ixx + WGW)
 
@@ -61,16 +92,14 @@ def simulate(
                 z = W.T @ y
                 variances = z**2
                 dg = z**2 - 1
-                g = g + lr_g * np.mean(dg, -1)  # gradient descent
+                g = g + lr_g * np.mean(dg, -1)  # gradient ascent
             else:
                 # compute diag(W.T@Cyy@W) efficiently
                 Cyy = M @ Cxx @ M.T
                 tmp = Cyy @ W
-                # Czz = W.T @ Cyy @ W
-                # variances = np.diag(Czz)
                 variances = np.array([w @ t for w, t in zip(W.T, tmp.T)])
                 dg = variances - 1
-                g = g + lr_g * dg  # gradient descent
+                g = g + lr_g * dg  # gradient ascent
 
             # project g to be positive
             g = np.clip(g, 0, np.inf) if clamp else g
@@ -78,10 +107,12 @@ def simulate(
                 error = np.linalg.norm(M @ Cxx @ M.T - Ixx) ** 2 / N**2
                 errors.append(error)
                 if np.allclose(g_all[-1], g):
-                    pbar.set_description(f"Converged at step {step}")
+                    if verbose:
+                        pbar.set_description(f"Converged.")
                     break
                 elif np.any(np.abs(g) > 200):
-                    pbar.set_description(f"Diverged.")
+                    if verbose:
+                        pbar.set_description(f"Diverged.")
                     break
                 else:
                     g_all.append(g)
