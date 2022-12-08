@@ -1,9 +1,10 @@
 import itertools
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 
 import numpy as np
 import numpy.typing as npt
 from scipy.linalg import fractional_matrix_power
+import scipy.optimize
 
 
 def normalize_frame(
@@ -210,90 +211,63 @@ def get_conv_frame(n: int, m: int, h: int, w: int) -> npt.NDArray[np.float64]:
     return W
 
 
-def get_grassmannian(
-    n: int,
-    m: int,
-    niter: int = 100,
-    fract_shrink: float = 0.8,
-    shrink_fact: float = 0.9,
-    A_init: Optional[npt.NDArray[np.float64]] = None,
-    expand: bool = False,
-):
-    """
-    TODO(lyndo): replace this with new version.
-    Sample a tight frame with minimal mutual coherence, ie. the angle
-    between any pair of column is the same, and the smallest it can be.
+def get_rand_untf(m: int, n: int) -> npt.NDArray[np.float64]:
+    """Generate random unit norm tight frame of size mxn."""
 
-    Approximate iterative algorithm to sample grassmannian mtx (tightest frame,
-    smallest possible mutual coherence).
+    # generate random tight frame
+    D = np.random.randn(m, n)
+    Q, _ = np.linalg.qr(D.T)
+    D = Q.T * np.sqrt(n/m)  # rows have correct norm
 
-    Parameters
-    ----------
-    n: Dimension of the ambient space
-    m: Number of vectors
-    niter: Number of iterations to run.
-    fract_shrink: TODO(lyndo).
-    shrink_fact: TODO(lyndo).
-    A_init: Initial matrix (optional).
+    atom_norms = np.sum(D*D, axis=0)
+    for i in range(n-1):
+        if atom_norms[i] != 1:  # do not normalize if already normalized
+            s1 = np.sign(atom_norms[i] - 1)
+            j = i+1
+            while np.sign(atom_norms[j]-1) == s1:  # find atom w norm on other side of 1
+                j = j + 1
 
-    Returns
-    -------
-    W : Tight frame of shape [n, m], with normalized columns
-    G : Gram matrix.
-    Res : 'optimal mu', 'mean mu', 'obtained mu'.
+            #compute tangent of rot angle
+            an1 = atom_norms[i]
+            an2 = atom_norms[j]
+            cp = D[:, i].T @ D[:, j]
+            t = (cp + np.sign(cp)*np.sqrt(cp*cp - (an1-1)*(an2-1))) / (an1-1)
+            # compute rot
+            c = 1 / np.sqrt(1+t*t)
+            s = t*c
+            # new atoms and updated norm
+            D[:, [i, j]] = D[:, [i, j]] @ np.array([[c, s], [-s, c]])
+            atom_norms[j] = an1+an2 - 1
+    
+    return D
 
-    Notes
-    -----
-    From Pierre-Etienne Fiquet May 17 2022
-    """
-    # assert m <= (np.minimum(n * (n + 1) // 2, (m - n) * (m - n + 1) // 2))
 
-    if A_init is None:
-        W = np.random.randn(n, m)
-    else:
-        assert (n, m) == A_init.shape
-        W = A_init
+def get_grassmannian(m: int, n: int) -> Tuple[npt.NDArray[np.float64], List[float]]:
+    """Generates an m x n Grassmannian frame."""
+    F = get_rand_untf(m, n)
 
-    # normalize columns
-    W = normalize_frame(W)
-    G = W.T @ W
-    if m > n:
-        mu = np.sqrt((m - n) / n / (m - 1))
+    obj = lambda M: np.max(np.abs(M.T @ M - np.eye(n)))
+    obj_coh = []
+    obj_coh.append(obj(F))
 
-    Res = np.zeros((niter, 3))
-    for i in range(niter):
-        # 1- shrink high inner products
-        gg = np.sort(np.abs(G).flatten())
-        idx, idy = np.where(
-            (np.abs(G) > gg[int(fract_shrink * (m**2 - m))]) & (np.abs(G - 1) > 1e-6)
-        )
-        G[idx, idy] *= shrink_fact
+    for iter in range(100):
+        tmp = obj(F)
+        for k in range(n):
+            ind = [i for i in range(n) if i != k]
 
-        # 1b- expand near 0 products
-        if expand:
-            idx, idy = np.where(
-                (np.abs(G) < gg[int((1 - fract_shrink) * (m**2 - m))])
-            )
-            G[idx, idy] /= shrink_fact
+            W = F[:, ind]
+            y = F[:, k]
+            W2 = np.concatenate((W.T, -W.T), axis=0)
+            b0 = np.ones((2*(n-1)))
 
-        # 2- reduce rank back to n
-        U, s, Vh = np.linalg.svd(G)
-        s[n:] *= 0
-        G = U @ np.diag(s) @ Vh
+            # solve linear program x = argmin_x y^T x s.t. W2 @ x <= 1
+            x = scipy.optimize.linprog(-y, A_ub=W2, b_ub=b0)
+            x = x.x
+            F[:,k] = x/np.linalg.norm(x)
+        
+        tmp1 = obj(F)
 
-        # 3- normalize cols
-        G = np.diag(1 / np.sqrt(np.diag(G))) @ G @ np.diag(1 / np.sqrt(np.diag(G)))
-
-        # status
-        gg = np.sort(np.abs(G).flatten())
-        idx, idy = np.where(
-            (np.abs(G) > gg[int(fract_shrink * (m**2 - m))]) & (np.abs(G - 1) > 1e-6)
-        )
-        GG = np.abs(G[idx, idy])
-        g_shape = GG.shape[0]
-        Res[i, :] = [mu, np.mean(GG), np.max(GG - np.eye(g_shape))]  # type: ignore
-
-    U, s, Vh = np.linalg.svd(G)
-    W = np.diag(np.sqrt(s[:n])) @ U[:, :n].T
-    W = normalize_frame(W)
-    return W, G, Res
+        if np.abs(tmp-tmp1)/np.abs(tmp) < 1E-3:
+            break
+        obj_coh.append(tmp1)
+    return F, obj_coh

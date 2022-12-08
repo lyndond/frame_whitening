@@ -28,10 +28,6 @@ def plot_frame2d(
         ]
 
 
-def plot_frame_axes2d(W: npt.NDArray[np.float64], ax=None, **kwargs):
-    pass
-
-
 def plot_ellipse(
     C: npt.NDArray[np.float64], n_pts: int = 20, ax=None, stdev: float =2., **kwargs
 ) -> None:
