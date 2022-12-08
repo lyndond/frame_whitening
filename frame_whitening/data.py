@@ -139,7 +139,7 @@ def plot_context_samples(
     sampled_idx = rng.choice(n_steps, n_samples, replace=False)
 
     cols = sns.color_palette(palette, n_contexts)
-    fig, ax = plt.subplots(n_contexts, n_samples, figsize=(n_samples, 4), dpi=dpi)
+    fig, ax = plt.subplots(n_contexts, n_samples, figsize=(n_samples, 4), dpi=dpi, squeeze=False)
     for ctx in range(n_contexts):
         VMIN, VMAX = np.min(all_contexts[ctx]), np.max(all_contexts[ctx])
 

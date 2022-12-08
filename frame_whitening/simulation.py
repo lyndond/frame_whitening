@@ -35,7 +35,7 @@ def simulate(
     N, K = W.shape
     g = g0 if g0 is not None else np.ones(K)
 
-    g_all = []
+    g_all = [g]
     g_last = []
     errors = []
     variances_all = []
@@ -77,7 +77,14 @@ def simulate(
             if step % save_every == 0:
                 error = np.linalg.norm(M @ Cxx @ M.T - Ixx) ** 2 / N**2
                 errors.append(error)
-                g_all.append(g)
+                if np.allclose(g_all[-1], g):
+                    pbar.set_description(f"Converged at step {step}")
+                    break
+                elif np.any(np.abs(g) > 200):
+                    pbar.set_description(f"Diverged.")
+                    break
+                else:
+                    g_all.append(g)
         variances_all.append(variances)
         g_last.append(g)
 
