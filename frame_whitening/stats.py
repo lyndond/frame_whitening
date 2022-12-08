@@ -26,23 +26,6 @@ def randcovn(
     return C, L
 
 
-def bures_dist(C1: npt.NDArray[np.float64], C2: npt.NDArray[np.float64]) -> float:
-    """Computes Bures distance between two covariance matrices"""
-
-    C2_sqrt = psd_sqrt(C2)
-    d2 = np.trace(C1 + C2 - 2 * psd_sqrt(C2_sqrt @ C1 @ C2_sqrt))
-    return np.sqrt(d2)
-
-
-def bures_fidelity(C1: npt.NDArray[np.float64], C2: npt.NDArray[np.float64]) -> float:
-    """arccos of sqrt fidelity gives an angle.
-    https://en.wikipedia.org/wiki/Bures_metric#Bures_distance
-    """
-    C2_sqrt = psd_sqrt(C2)
-    F = np.trace(psd_sqrt(C2_sqrt @ C1 @ C2_sqrt)) ** 2
-    return F
-
-
 def psd_sqrt(C: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """Computes PSD square root"""
     Csqrt = fractional_matrix_power(C, 0.5)

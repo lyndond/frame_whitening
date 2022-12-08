@@ -15,16 +15,6 @@ def normalize_frame(
     return W0
 
 
-def compute_g_opt(
-    C: npt.NDArray[np.float64], W: npt.NDArray[np.float64]
-) -> npt.NDArray[np.float64]:
-    """Compute w using homog representation"""
-    G2 = (W.T @ W) ** 2
-    s = np.diag(W.T @ C @ W)
-    g = np.linalg.solve(G2, s)
-    return g
-
-
 def get_mercedes_frame(
     parseval: bool = False, jitter: bool = False
 ) -> npt.NDArray[np.float64]:
@@ -48,28 +38,6 @@ def parsevalize(W: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     S12 = fractional_matrix_power(S, -0.5)
     R2 = S12 @ W  # turn parseval
     return R2
-
-
-def squared_gram(W: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
-    gram = W.T @ W
-    return gram**2
-
-
-def frame_distance(
-    W: npt.NDArray[np.float64], C1: npt.NDArray[np.float64], C2: npt.NDArray[np.float64]
-) -> npt.NDArray[np.float64]:
-    """Computes d(C1, C2) = (w1-w2)' * (G * G) * (w1-w2) quadratic form distance in w-space for given R
-    This is equivalent to computing the Frobenius norm between the two covariance matrices.
-    """
-
-    Gram2 = squared_gram(W)
-
-    g1 = compute_g_opt(C1, W)
-    g2 = compute_g_opt(C2, W)
-
-    dist_sq = (g1 - g2) @ Gram2 @ (g1 - g2)
-    dist = np.sqrt(dist_sq)
-    return dist
 
 
 def get_equiangular_3d() -> npt.NDArray[np.float64]:
