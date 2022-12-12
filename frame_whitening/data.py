@@ -166,4 +166,3 @@ def plot_patch_stats(all_images: npt.NDArray) -> None:
     ax[1].set(title="Cross-patch variance", xticklabels=[], yticklabels=[])
     plt.colorbar(im)
     fig.tight_layout()
-
