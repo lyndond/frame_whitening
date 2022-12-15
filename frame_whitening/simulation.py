@@ -79,6 +79,7 @@ def adapt_covariance(
     for Cxx in Cxx_list:
         if online:
             Lxx = np.linalg.cholesky(Cxx)
+
         for step in range(n_batch):
             if verbose:
                 pbar.update(1)
