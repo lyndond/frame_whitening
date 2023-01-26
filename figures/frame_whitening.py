@@ -1,12 +1,15 @@
+"""Anonymized code implementing frame whitening algorithms.
+
+This simplified version of the algorithm assumes that the covariance is known.
+"""
+
 from collections.abc import Sequence
-from typing import Tuple, Optional, List
+from typing import Tuple, Optional
 
 import numpy as np
 import numpy.typing as npt
-import scipy as sp
+import scipy.linalg
 from tqdm import tqdm
-
-from frame_whitening import stats
 
 
 def adapt_covariance(
@@ -31,7 +34,7 @@ def adapt_covariance(
     npt.NDArray[np.float64],
 ]:
     """Adapt the gains g to whiten the data with covariance matrix Cxx. 
-
+    
     In offline mode, the covariance matrix is whitened directly. In online mode, its 
     Cholesky factor is computed, and drawn samples are used to whiten the data.
 
@@ -92,7 +95,7 @@ def adapt_covariance(
             M = np.linalg.inv(alpha*Ixx + WGW)
 
             if online: # run simulation with minibatches
-                x = stats.sample_x(Lxx, batch_size)  # draw a sample of x
+                x = sample_x(Lxx, batch_size)  # draw a sample of x
                 y = np.linalg.inv(Ixx + WGW) @ x
                 z = W.T @ y
                 variances = z**2
@@ -129,6 +132,14 @@ def adapt_covariance(
     return g_last, g_all, errors, variances  # type: ignore
 
 
+def sample_x(
+    Lxx: npt.NDArray[np.float64], n_samples: int = 1
+) -> npt.NDArray[np.float64]:
+    """Takes cholesky L to colour n_samples of white noise"""
+    n = Lxx.shape[0]
+    return Lxx @ np.random.randn(n, n_samples)
+
+
 def get_g_opt(
     W: npt.NDArray[np.float64], 
     Cxx: npt.NDArray[np.float64],
@@ -138,6 +149,6 @@ def get_g_opt(
     assert K == N * (N + 1) // 2, "W must have K = N(N+1)/2 columns."
     Ixx = np.eye(N)
     gram_sq_inv = np.linalg.inv((W.T @ W) ** 2)
-    Cxx_12 = sp.linalg.sqrtm(Cxx)
+    Cxx_12 = scipy.linalg.sqrtm(Cxx)
     g_opt = gram_sq_inv @ np.diag(W.T @ (Cxx_12 - Ixx) @ W)
     return g_opt
