@@ -81,6 +81,7 @@ def get_rotation_matrix3d(alpha: float, beta: float, gamma: float) -> npt.NDArra
 
 
 def rot2(theta: float) -> npt.NDArray[np.float64]:
+    """Returns a 2D rotation matrix w/ angle theta in radians."""
     return np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
 
 
