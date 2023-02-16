@@ -135,7 +135,7 @@ def get_g_opt(
 ) -> npt.NDArray[np.float64]:
     """Compute optimal G."""
     N, K = W.shape
-    assert K == N * (N + 1) // 2, "W must have K = N(N+1)/2 columns."
+    # assert K == N * (N + 1) // 2, "W must have K = N(N+1)/2 columns."
     Ixx = np.eye(N)
     gram_sq_inv = np.linalg.inv((W.T @ W) ** 2)
     Cxx_12 = sp.linalg.sqrtm(Cxx)
