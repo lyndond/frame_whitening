@@ -3,12 +3,13 @@ import copy
 from pathlib import Path
 import os
 import multiprocessing
-from typing import Any, Dict
+from typing import Any, Dict, List
 print(f'num cpus: {multiprocessing.cpu_count()}')
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
+import scipy as sp
 import scipy.io as scio
 import seaborn as sns
 #%%
@@ -285,21 +286,22 @@ def get_response_matrices(data, cells="MC"):
     n_neurons = D.shape[0]
 
     # window 1
-    X1 = D[:, t1[0]:t1[-1]+1]
+    X1 = D[:, t1[0]:t1[-1]+1]#.mean(axis=1, keepdims=True)
     X1 = X1.reshape((n_neurons, -1))
 
     # window2
-    X2 = D[:, t2[0]:t2[-1]+1]
+    X2 = D[:, t2[0]:t2[-1]+1]#.mean(axis=1, keepdims=True)
     X2 = X2.reshape((n_neurons, -1))
 
     return X1, X2
 
 
-def participation_ratio(d):
+def participation_ratio(X):
+    C = np.cov(X, rowvar=True)
+    d, _ = np.linalg.eigh(C)
     l1 = np.linalg.norm(d, ord=1) 
     l2 = np.linalg.norm(d, ord=2) 
     return (l1**2) / (l2 ** 2)
-
 
 cells = "MC"
 Y1, Y2 = get_response_matrices(data, cells=cells)
@@ -347,49 +349,89 @@ with sns.plotting_context('talk'):
     ax[2].legend()
     sns.despine()
     fig.tight_layout()
-print(participation_ratio(d1))
-print(participation_ratio(d2))
+print(participation_ratio(Y1))
+print(participation_ratio(Y2))
+
+
+#%%
+def moment_k_cycles(Y: np.ndarray, k: int) -> np.ndarray:
+    """Unbiased estimator of k moments of population spectrum.
+
+    Kong and Valiant, "Spectrum estimation from samples", Annals of Stats. 2017.
+    """
+    assert k > 0, "k must be positive integer."
+
+    d, n = Y.shape
+    A = Y.T @ Y  # n x n 
+    
+    G = np.triu(A, k=1)  # upper tri of A, diag and lower tri set to zero
+    Gi = np.eye(A.shape[0])
+    moments = []
+    for _ in range(1, k+1):
+        nchoosek = sp.special.comb(n, _)
+        moments.append(np.trace(Gi @ A) / (d * nchoosek))
+        Gi = Gi @ G
+    return np.array(moments)
+
+def participation_ratio2(X):
+    """Ratio of sum of eigenvalues squared to the sum of squared eigenvalues."""
+    d, _ = X.shape
+    moments = moment_k_cycles(X, 2)
+    moments = moments * d
+    return  moments[0]**2 / moments[1]
+
+print(participation_ratio2(Y1), participation_ratio2(Y2))
+print(participation_ratio(Y1), participation_ratio(Y2))
+moment_k_cycles(Y1, 2)
+moment_k_cycles(Y2, 2)
 
 #%%    
 from tqdm import tqdm
 
-def bootstrapped_participation_ratio(data, cells, n_dims, n_bootstraps=1000):
+def permutation_participation_ratio(data, cells, n_perms=1000):
     """Experiment to compute PR of covariance matrix of reduced population."""
     rng = np.random.default_rng(0)
-    p1 = []    
-    p2 = []
     cells = 'MC'
-    for _ in tqdm(range(n_bootstraps)):
-        # sample rows of X1 and X2 without replacement
-        X1, X2 = get_response_matrices(data, cells=cells)
-        n_neurons, _ = X1.shape
-        idx = rng.choice(n_neurons, size=n_dims, replace=False)
-        X1, X2 = X1[idx, :], X2[idx, :]
+    X1, X2 = get_response_matrices(data, cells=cells)
+    _, n_samples = X1.shape
 
-        C1 = np.cov(X1, rowvar=True)
-        C2 = np.cov(X2, rowvar=True)
-        d1 = np.linalg.eigh(C1)[0][::-1]
-        d2 = np.linalg.eigh(C2)[0][::-1]
-        p1.append(participation_ratio(d1))
-        p2.append(participation_ratio(d2))
-    return np.array(p1), np.array(p2)
+    # compute participation ratio of original data
+    pr01 = participation_ratio2(X1)
+    pr02 = participation_ratio2(X2)
+    dp0 = pr02 - pr01
+    dp = []
+    # permutation test
+    X = np.concatenate([X1, X2], axis=1)  # concatenate all observations
+    for _ in tqdm(range(n_perms)):
+        # sample columns of X1 and X2 without replacement
+        idx = rng.permutation(2*n_samples)
+        idx1, idx2 = idx[:n_samples], idx[n_samples:]
+        X1, X2 = X[:, idx1], X[:, idx2]
+        dp.append(participation_ratio2(X2) - participation_ratio2(X1))
 
-n_dims = 20
-n_bootstraps = 5000
-p1, p2 = bootstrapped_participation_ratio(data, cells="MC", n_dims=n_dims, n_bootstraps=n_bootstraps)
+    return dp0, np.array(dp)
 
-# compute p value
-dp = np.sort(p2-p1)
-pval = np.searchsorted(dp, 0) / len(dp)
+
+n_perms = 5000
+dp0, dp = permutation_participation_ratio(data, cells="MC", n_perms=n_perms)
+
+#compute p value
+pval = 1 - np.searchsorted(dp, dp0) / len(dp)
 with sns.plotting_context('talk'):
-    fig, ax = plt.subplots(1, 1, figsize=(10, 5), dpi=300)
-    ax.hist(p2-p1, bins=50, alpha=0.5, label=f'p={pval:.3f}')
-    ax.set(xlabel=r'$\pi_2 - \pi_1$', ylabel='Count', title=f'Bootstrapped P.R. of {n_dims} {cells} neurons')
+    fig, ax = plt.subplots(1, 1, figsize=(15, 5), dpi=300)
+    ax.vlines(dp0, 0, 100, label='Observed', color='k', lw=2)
+    ax.hist(dp, bins=50, alpha=0.5, label=f'Null distribution: p={pval:.3f}')
+    ax.set(xlabel=r'$\pi$', ylabel='Count', title=r'Bootstrapped $\Delta \pi$ ' f'of {n_dims} {cells} neurons')
+    ax.set(xlabel=r'$\pi_2 - \pi_1$')
     ax.legend()
     sns.despine()
     fig.tight_layout()
 
 
 #%%
-(Wmc2in.sum(0)>0).sum()
-(Win2mc.sum(0)>0).sum()
+
+Z1, Z2 = get_response_matrices(data, cells='IN')
+
+fig, ax = plt.subplots(1, 2, figsize=(10, 5), dpi=300)    
+ax[0].imshow(Wf.T @ Y1, aspect='auto')
+ax[1].imshow(Z1, aspect='auto')
