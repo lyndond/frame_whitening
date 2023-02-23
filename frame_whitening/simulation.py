@@ -43,7 +43,7 @@ def adapt_covariance(
     n_batch : Number of batches/steps run algorithm. Valid for both online and offline.
     lr_g : Learning rate (step size) for gains gradient ascent.
     g0 : Initial gains. If None, use ones.
-    online : If True, run in online mode (True). If False, run in offline mode.
+    online : If True, run in online mode. If False, run in offline mode.
     clamp : If True, clamp gains to be non-negative, i.e. projected gradient ascent.
     alpha : Constant multiplier for Identity leak term in y dynamics. 
     save_every : Save gains, errors, etc. every `save_every` steps.
@@ -86,13 +86,14 @@ def adapt_covariance(
 
         for step in range(n_batch):
             if verbose:
-                pbar.update(1)
+                pbar.update(1)  # type: ignore
 
             WGW = W @ (g[:, None] * W.T)  # equiv to W@diag(g)@W.T
             M = np.linalg.inv(alpha*Ixx + WGW)
 
             if online: # run simulation with minibatches
-                x = stats.sample_x(Lxx, batch_size)  # draw a sample of x
+                # draw a sample of x
+                x = stats.sample_x(Lxx, batch_size)
                 y = np.linalg.inv(Ixx + WGW) @ x
                 z = W.T @ y
                 variances = z**2

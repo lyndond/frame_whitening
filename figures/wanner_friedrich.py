@@ -177,8 +177,12 @@ def normalize_columns(x):
     norm[np.where(np.isclose(norm, 0.))] = 1.
     return x / norm
 
-Wf = normalize_columns(Wmc2in.T)
-Wb = normalize_columns(Win2mc)
+# Wf = normalize_columns(Wmc2in.T)
+# Wb = normalize_columns(Win2mc)
+
+Wf = Wmc2in.T
+Wb = Win2mc
+
 
 with sns.plotting_context('paper'):
     fig, ax = plt.subplots(1, 2, figsize=(10, 5), dpi=600)
@@ -275,14 +279,16 @@ plot_time_bin_covs(data, 'IN', correlation=True, cmap='viridis')
 
 # make response matrices that concatenate each time step and trial and odor
 
-def get_response_matrices(data, cells="MC"):
+def get_response_matrices(data, cells="MC", trials=(1, 2)):
     assert cells in ("MC", "IN")
     t1, t2 = data['twinstretch1'], data['twinstretch2']
 
     # trials 1 and 2
-    D1 = data[f'DMot{cells}tr1'].copy()
-    D2 = data[f'DMot{cells}tr2'].copy()
-    D = np.stack([D1, D2], axis=-1)
+    D = []
+    for trial in trials:
+        D.append(data[f'DMot{cells}tr{trial}'].copy())
+    D = np.stack(D, axis=-1)
+    D = np.squeeze(D)
     n_neurons = D.shape[0]
 
     # window 1
@@ -295,6 +301,11 @@ def get_response_matrices(data, cells="MC"):
 
     return X1, X2
 
+Y1, Y2 = get_response_matrices(data, cells="MC", trials=(1, 2))
+Y11, Y12 = get_response_matrices(data, cells="MC", trials=(1, ))
+Y21, Y22 = get_response_matrices(data, cells="MC", trials=(2, ))
+
+#%%
 
 def participation_ratio(X):
     C = np.cov(X, rowvar=True)
@@ -352,6 +363,40 @@ with sns.plotting_context('talk'):
 print(participation_ratio(Y1))
 print(participation_ratio(Y2))
 
+#%%
+
+def logvar(X, axis=1, eps=1E-6):
+    return np.log(X.var(axis=1) + eps)
+
+import scipy.stats
+
+with sns.plotting_context('paper'):
+    lims = (-6, 6)
+
+    eps = 1E-6
+    fig, ax = plt.subplots(1, 2, figsize=(10, 5), dpi=200)
+    ax[0].plot(logvar(Wf.T@Y1), logvar(Wf.T@Y2), '.k', label='Trial 1&2')
+    ax[0].plot(lims, lims, 'k--')
+    ax[0].set(xlabel='Time bin 1 Z log-variance', ylabel='Time bin 2 Z log-variance', yscale='linear', xscale='linear',
+    xlim=lims, ylim=lims,
+    )
+
+
+    ax[1].hist(logvar(Wf.T@Y1), bins=50, alpha=0.5, label='Time bin 1')
+    ax[1].hist(logvar(Wf.T@Y2), bins=50, alpha=0.5, label='Time bin 2')
+    ax[1].set(xlabel='Z log-variance', ylabel='Count', yscale='linear', xscale='linear',
+    xlim=(-6, 6), title='marginal distr.')
+    ax[1].legend()
+
+    iqr1 = scipy.stats.iqr(logvar(Wf.T@Y1))
+    iqr2 = scipy.stats.iqr(logvar(Wf.T@Y2))
+
+    # add text
+    ax[1].text(0.05, 0.95, f'IQR Time bin 1: {iqr1:.2f}', transform=ax[1].transAxes, va='top')
+    ax[1].text(0.05, 0.9, f'IQR Time bin 2: {iqr2:.2f}', transform=ax[1].transAxes, va='top')
+
+    sns.despine()
+    fig.tight_layout
 
 #%%
 def moment_k_cycles(Y: np.ndarray, k: int) -> np.ndarray:
