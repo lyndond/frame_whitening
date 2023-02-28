@@ -1,9 +1,10 @@
 #%%
 import copy
-from pathlib import Path
-import os
+import itertools
 import multiprocessing
-from typing import Any, Dict, List
+import os
+from typing import Any, Dict
+print(os.getcwd())
 print(f'num cpus: {multiprocessing.cpu_count()}')
 
 import matplotlib.pyplot as plt
@@ -21,7 +22,6 @@ def load_matfile(filename: str) -> Dict:
             return [parse_mat(entry) for entry in element]
 
         # matlab struct
-        # if element.__class__ == scio.matlab.mio5_params.mat_struct:
         if element.__class__ == scio.matlab.mat_struct:
             return {fn: parse_mat(getattr(element, fn)) for fn in element._fieldnames}
 
@@ -66,6 +66,9 @@ def process_data(data0: Dict) -> Dict:
     for key in id_keys:
         data[key] = data[key] - 1
     
+    for window in ('twinstretch1', 'twinstretch2'):
+        data[window] = data[window] - 1
+    
     data.pop('Cellinfo')
     for key in ('Cellinfo2', 'CellinfoMC', 'CellinfoIN'):
         data[key] = process_cell_info(data[key])
@@ -81,7 +84,7 @@ info = data['Cellinfo2']
 
 def plot_responses(data, cells, cmap='mako', vmin=0., vmax=None, dpi=100):
     assert cells in ('MC', 'IN')
-    to_plot = data[f'DMot{cells}']
+    to_plot = data[f'DMot{cells}'].copy()
     fig, ax = plt.subplots(2, 4, figsize=(16, 8), sharex='all', sharey='all', dpi=dpi)
     ax = ax.ravel()
     cmap = sns.color_palette(cmap, as_cmap=True)
@@ -90,11 +93,15 @@ def plot_responses(data, cells, cmap='mako', vmin=0., vmax=None, dpi=100):
     if vmax is None:
         vmax = np.nanmax(to_plot)
 
+    time = data['time0']
     for stim in range(8):
         ax[stim].imshow(to_plot[...,stim], aspect='auto', cmap=cmap, vmin=vmin, vmax=vmax)
         odor = data['odorlist2'][stim]
-        # odor = data['odorlist'][odor]
-        ax[stim].set(title=f'{odor}', ylabel=f'{cells} neuron', xlabel='Time')
+        ax[stim].set(title=f'{odor}', ylabel=f'{cells} neuron', xlabel='Time',
+        xticks=np.arange(0, len(time), 100), xticklabels=np.round(time[::100], 1),
+        xlim=(20, 70)
+        )
+                     
     sns.despine()
     fig.tight_layout()
 
@@ -125,24 +132,28 @@ mu_y = nanmean_normalized(y)
 mu_z = nanmean_normalized(z)
 
 # time = data['time2'] * data['tbin']
-time = data['time0']
-fig, ax = plt.subplots(1,1, figsize=(4, 4), sharex='all', sharey='all')
-cols_cells = sns.color_palette('Set1', n_colors=2)
-ax.plot(time, mu_y, '.-', label='MC', color=cols_cells[1], lw=2)
-ax.plot(time, mu_z, '.-', label='IN', color=cols_cells[0], lw=2)
-t1 = time[data['twinstretch1']]
-t2 = time[data['twinstretch2']]
-# plot shaded rectangle during (t1[0], t1[-1]) and (t2[0], t2[-1])
+with sns.plotting_context('paper'):
+    time = data['time0']
+    fig, ax = plt.subplots(1,1, figsize=(4, 4), sharex='all', sharey='all', dpi=300)
+    cols_cells = sns.color_palette('Set1', n_colors=2)
+    ax.plot(time, mu_y, '.-', label='MC', color=cols_cells[1], lw=2)
+    ax.plot(time, mu_z, '.-', label='IN', color=cols_cells[0], lw=2)
+    t1 = time[data['twinstretch1']]
+    t2 = time[data['twinstretch2']]
+    # plot shaded rectangle during (t1[0], t1[-1]) and (t2[0], t2[-1])
 
-from matplotlib.patches import Rectangle
-ylim = (0, 1.05)
-ax.add_patch(Rectangle((t1[0], 0), t1[-1] - t1[0], ylim[1], facecolor='k', alpha=0.2))
-ax.add_patch(Rectangle((t2[0], 0), t2[-1] - t2[0], ylim[1], facecolor='k', alpha=0.2))
+    from matplotlib.patches import Rectangle
+    ylim = (0, 1.05)
+    ax.add_patch(Rectangle((t1[0], 0), t1[-1] - t1[0], ylim[1], facecolor='k', alpha=0.2))
+    ax.add_patch(Rectangle((t2[0], 0), t2[-1] - t2[0], ylim[1], facecolor='k', alpha=0.2))
 
-ax.set(ylim=ylim, xlim=(-2.2, 4.2), yticks=(0, .5, 1.), 
-xticks=(-2, 0, 2, 4))
-ax.legend()
-sns.despine()
+    ax.set(ylim=ylim, 
+    xlim=(-2.2, 4.2), yticks=(0, .5, 1.), 
+    xticks=(-2, 0, 2, 4),
+    title='Aligned odour response', xlabel='Time (s)', ylabel='Normalized response'
+    )
+    ax.legend()
+    sns.despine()
 
 # number of nan rows in y and z
 print(f'Num valid MC: {np.sum(~np.isnan(y), axis=0).min()}/{y.shape[0]}')
@@ -152,7 +163,6 @@ print(f'Num valid IN: {np.sum(~np.isnan(z), axis=0).min()}/{z.shape[0]}')
 def id_to_idx(id_list, info):
     return info['row_idx'][info['ID'].isin(id_list)].values
 
-import itertools
 def get_w_directed(pre_id, post_id, data):
     allowable_id = data['NeuronIDs1003']
     # make sure all pre_id and post_id are in allowable_id
@@ -177,11 +187,11 @@ def normalize_columns(x):
     norm[np.where(np.isclose(norm, 0.))] = 1.
     return x / norm
 
-# Wf = normalize_columns(Wmc2in.T)
-# Wb = normalize_columns(Win2mc)
+Wf = normalize_columns(Wmc2in.T)
+Wb = normalize_columns(Win2mc)
 
-Wf = Wmc2in.T
-Wb = Win2mc
+# Wf = Wmc2in.T
+# Wb = Win2mc
 
 
 with sns.plotting_context('paper'):
@@ -195,9 +205,30 @@ with sns.plotting_context('paper'):
     sns.despine()
     fig.tight_layout()
 
-#%%
-print((Wf.sum(0)>0).sum())
-print((Wb.sum(0)>0).sum())
+
+def permutation_test_symmetry(Wf, Wb, n_perm=1000, seed=42069):
+    # frob norm between two matrices
+    d = np.linalg.norm(Wf - Wb)
+
+    rng = np.random.default_rng(seed)
+    d_perm = []
+    for _ in range(n_perm):
+        idx_rows = rng.permutation(Wb.shape[0])
+        idx_cols = rng.permutation(Wb.shape[1])
+        Wb_perm = Wb[idx_rows][:, idx_cols]
+        d_perm.append(np.linalg.norm(Wf - Wb_perm))
+
+    p = 1 - np.sum(d_perm > d) / n_perm
+
+    _, ax = plt.subplots(1, 1, figsize=(3, 2), dpi=100)
+    ax.hist(d_perm, bins=50, density=False, label='Null')
+    ax.axvline(d, color='r', ls='--', lw=2, label='Observed')
+    ax.set(xlabel=r'$\Vert{\bf W}_f^\top - {\bf W}_b\Vert_{F}$', ylabel='Count', 
+           title=f'Perm test symmetry: p={p:.3f}')
+    ax.legend()
+    sns.despine()
+
+permutation_test_symmetry(Wf, Wb)
 
 #%%
 
@@ -370,8 +401,9 @@ def logvar(X, axis=1, eps=1E-6):
 
 import scipy.stats
 
+
 with sns.plotting_context('paper'):
-    lims = (-6, 6)
+    lims = (-6, 0)
 
     eps = 1E-6
     fig, ax = plt.subplots(1, 2, figsize=(10, 5), dpi=200)
@@ -385,18 +417,51 @@ with sns.plotting_context('paper'):
     ax[1].hist(logvar(Wf.T@Y1), bins=50, alpha=0.5, label='Time bin 1')
     ax[1].hist(logvar(Wf.T@Y2), bins=50, alpha=0.5, label='Time bin 2')
     ax[1].set(xlabel='Z log-variance', ylabel='Count', yscale='linear', xscale='linear',
-    xlim=(-6, 6), title='marginal distr.')
+    xlim=lims, title='marginal distr.')
     ax[1].legend()
 
     iqr1 = scipy.stats.iqr(logvar(Wf.T@Y1))
     iqr2 = scipy.stats.iqr(logvar(Wf.T@Y2))
 
     # add text
-    ax[1].text(0.05, 0.95, f'IQR Time bin 1: {iqr1:.2f}', transform=ax[1].transAxes, va='top')
-    ax[1].text(0.05, 0.9, f'IQR Time bin 2: {iqr2:.2f}', transform=ax[1].transAxes, va='top')
+    ax[1].text(.75, 0.8, f'IQR: {iqr1:.2f}', transform=ax[1].transAxes, va='top', color="C0")
+    ax[1].text(.75, 0.75, f'IQR: {iqr2:.2f}', transform=ax[1].transAxes, va='top', color="C1")
 
     sns.despine()
     fig.tight_layout
+
+def permutation_test_iqr_logvar(Y1, Y2, n_perm=1000, seed=0):
+    rng = np.random.default_rng(seed)
+    logvar1 = logvar(Wf.T @ Y1)
+    logvar2 = logvar(Wf.T @ Y2)
+
+    iqr1 = scipy.stats.iqr(logvar1)
+    iqr2 = scipy.stats.iqr(logvar2)
+    diff = iqr1 - iqr2
+
+    iqr_diffs = []
+
+    all_iqr = np.concatenate([logvar1, logvar2])
+    n = len(all_iqr)
+    for _ in range(n_perm):
+        idx = rng.permutation(n)
+        all_iqr = all_iqr[idx]
+
+        iqr_diffs.append(
+            scipy.stats.iqr(all_iqr[:n//2]) - scipy.stats.iqr(all_iqr[n//2:])
+            )
+    
+    pval = np.sum(np.abs(iqr_diffs) > np.abs(diff)) / n_perm
+    pval = 1 - np.sum(diff>iqr_diffs) / n_perm
+    _, ax = plt.subplots(1, 1, figsize=(3,3), dpi=100)
+    ax.hist(iqr_diffs, bins=50)
+    ax.axvline(diff, color='r', lw=2)
+    ax.set(xlabel='IQR difference', ylabel='Count', title=f'p-value: {pval:.2f}')
+    sns.despine()
+
+    return pval
+
+permutation_test_iqr_logvar(Y1, Y2, n_perm=1000, seed=0)
 
 #%%
 def moment_k_cycles(Y: np.ndarray, k: int) -> np.ndarray:
@@ -475,8 +540,5 @@ with sns.plotting_context('talk'):
 
 #%%
 
-Z1, Z2 = get_response_matrices(data, cells='IN')
-
-fig, ax = plt.subplots(1, 2, figsize=(10, 5), dpi=300)    
-ax[0].imshow(Wf.T @ Y1, aspect='auto')
-ax[1].imshow(Z1, aspect='auto')
+# solve for g
+# Wb @ diag(g) @ Wf.T @ Y2 = Y2 - Y1
