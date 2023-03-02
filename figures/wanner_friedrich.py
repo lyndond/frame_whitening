@@ -14,6 +14,7 @@ import scipy as sp
 import scipy.io as scio
 import scipy.stats
 import seaborn as sns
+from sklearn import preprocessing
 from tqdm import tqdm
 #%%
 
@@ -107,10 +108,8 @@ def plot_responses(data, cells, cmap='mako', vmin=0., vmax=None, dpi=100):
     sns.despine()
     fig.tight_layout()
 
-
 plot_responses(data, 'MC', cmap='mako')
 plot_responses(data, 'IN', cmap='rocket')
-
 
 idx_in = data['INinds']
 idx_mc = data['MCinds']
@@ -166,6 +165,7 @@ def id_to_idx(id_list, info):
     return info['row_idx'][info['ID'].isin(id_list)].values
 
 def get_w_directed(pre_id, post_id, data):
+    """Get the weight matrix from pre_id to post_id."""
     allowable_id = data['NeuronIDs1003']
     # make sure all pre_id and post_id are in allowable_id
     assert np.all(np.isin(pre_id, allowable_id))
@@ -179,13 +179,10 @@ def get_w_directed(pre_id, post_id, data):
         W.append(data['W'][pre_idx][post_idx])
     
     return np.array(W).reshape((m, n)).T
-    
 
 Wmc2in = get_w_directed(data['CellinfoMC']['ID'], data['CellinfoIN']['ID'], data)
 Win2mc = get_w_directed(data['CellinfoIN']['ID'], data['CellinfoMC']['ID'], data)
 
-data['CellinfoMC']
-# data['W']
 print(data.keys())
 print(data['DMotAllbin'].shape)
 idx_mc = data['CellinfoMC']['row_idx'].values
@@ -197,9 +194,6 @@ for i in range(11):
     tmp_mc = data['DMotAll'][idx_mc][...,i] - data['DMotAll'][idx_mc][...,-1].mean(-1, keepdims=True)
     tmp_in = data['DMotAll'][idx_in][...,i] - data['DMotAll'][idx_in][...,-1].mean(-1, keepdims=True)
 
-    tmp_mc = data['DMotAll'][idx_mc][...,i] - np.nanmean(data['DMotAll'][idx_mc][...,1], 0, keepdims=True)
-    tmp_in = data['DMotAll'][idx_in][...,i] - np.nanmean(data['DMotAll'][idx_in][...,1], 0, keepdims=True)
-
     # ax[i].imshow(tmp , aspect='auto', cmap='icefire')
     ax[i].plot(data['time0'], np.nanmean(tmp_mc, 0), 'C0.-', lw=2)
     ax[i].plot(data['time0'], np.nanmean(tmp_in, 0), 'C1.-', lw=2)
@@ -210,12 +204,11 @@ for i in range(11):
     # plot shaded rectangle during (t1[0], t1[-1]) and (t2[0], t2[-1])
     ax[i].add_patch(Rectangle((t1[0], 0), t1[-1] - t1[0], .4, facecolor='k', alpha=0.2))
     ax[i].add_patch(Rectangle((t2[0], 0), t2[-1] - t2[0], .4, facecolor='k', alpha=0.2))
-    ax[i].set(title=f'{data["odorlist"][i]}', xlim=(-2, 4), ylim=(0, .4))
+    ax[i].set(title=f'{data["odorlist"][i]}', xlim=(-2, 4))#, ylim=(0, .4))
     fig.tight_layout()
 
 
 #%%
-
 def normalize_columns(x):
     norm = np.linalg.norm(x, ord=2, axis=0, keepdims=True)
     norm[np.where(np.isclose(norm, 0.))] = 1.
@@ -223,6 +216,15 @@ def normalize_columns(x):
 
 Wf = normalize_columns(Wmc2in.T)
 Wb = normalize_columns(Win2mc)
+
+#%%
+
+fig, ax = plt.subplots(1, 1)
+
+sns.kdeplot(x=Wf.flatten(), y=Wb.flatten(), ax=ax, cmap='mako', fill=True, levels=100)
+ax.axis('square')
+
+#%%
 
 # Wf = Wmc2in.T
 # Wb = Win2mc
@@ -246,16 +248,20 @@ def permutation_test_symmetry(Wf, Wb, n_perm=1000, seed=42069):
 
     rng = np.random.default_rng(seed)
     d_perm = []
+    d_perm2 = []
+
     for _ in range(n_perm):
         idx_rows = rng.permutation(Wb.shape[0])
         idx_cols = rng.permutation(Wb.shape[1])
-        Wb_perm = Wb[idx_rows][:, idx_cols]
+        Wb_perm = Wb[idx_rows]#[:, idx_cols]
         d_perm.append(np.linalg.norm(Wf - Wb_perm))
+        d_perm2.append(np.linalg.norm(Wf - Wf[:, idx_cols]))
 
     p = 1 - np.sum(d_perm > d) / n_perm
 
     _, ax = plt.subplots(1, 1, figsize=(3, 2), dpi=100)
-    ax.hist(d_perm, bins=50, density=False, label='Null')
+    ax.hist(d_perm, bins=50, density=False, label='Null', alpha=.5)
+    ax.hist(d_perm2, bins=50, density=False, label='Null2', alpha=.5)
     ax.axvline(d, color='r', ls='--', lw=2, label='Observed')
     ax.set(xlabel=r'$\Vert{\bf W}_f^\top - {\bf W}_b\Vert_{F}$', ylabel='Count', 
            title=f'Perm test symmetry: p={p:.3f}')
@@ -284,6 +290,88 @@ def get_windowed_responses(data, cells="MC"):
     R[(2, 1)] = get_responses_within_time_window(data[f'DMot{cells}tr1'], t2)
     R[(2, 2)] = get_responses_within_time_window(data[f'DMot{cells}tr2'], t2)
     return R
+
+RY = get_windowed_responses(data, cells="MC")
+RZ = get_windowed_responses(data, cells="IN")
+
+Z10 = np.concatenate([Wf.T @ RY[(1, 1)], Wf.T @ RY[(1, 2)]], axis=1)
+Z20 = np.concatenate([Wf.T @ RY[(2, 1)], Wf.T @ RY[(2, 2)]], axis=1)
+
+input_max = np.max(np.concatenate([Z10, Z20], axis=1), axis=1)
+input_max  = np.array([1 if np.isclose(x, 0) else x for x in input_max])  # handle zeros
+Z10 /= input_max[:, None]
+Z20 /= input_max[:, None] 
+
+GZ10 = np.concatenate([RZ[(1, 1)], RZ[(1, 2)]], axis=1)
+GZ20 = np.concatenate([RZ[(2, 1)], RZ[(2, 2)]], axis=1) 
+
+output_max = np.max(np.concatenate([GZ10, GZ20], axis=1), axis=1)
+output_max = np.array([1 if np.isclose(x, 0) else x for x in output_max])  # handle zeros
+
+# GZ10 /= output_max[:, None]
+# GZ20 /= output_max[:, None]
+
+# remove entries with zero input
+idx = np.where(np.isclose(np.max(Z10, axis=1), 0))
+Z10 = np.delete(Z10, idx, axis=0)
+Z20 = np.delete(Z20, idx, axis=0)
+GZ10 = np.delete(GZ10, idx, axis=0)
+GZ20 = np.delete(GZ20, idx, axis=0)
+
+bins = np.linspace(.20, 1.0, 10)
+stats = lambda x: (x.mean(), x.std() / np.sqrt(len(x)))
+def get_binned_stats(x, y, bins):
+
+    mean = sp.stats.binned_statistic(x.flatten(), y.flatten(), bins=bins, statistic='mean')
+    std = sp.stats.binned_statistic(x.flatten(), y.flatten(), bins=bins, statistic='std')
+    count = sp.stats.binned_statistic(x.flatten(), y.flatten(), bins=bins, statistic='count')
+    stats = dict(
+        mean=mean.statistic, 
+        std=std.statistic, 
+        count=count.statistic, 
+        bin_edges=mean.bin_edges[:-1],
+        )
+    return stats
+
+stats1 = get_binned_stats(Z10, GZ10, bins)
+stats2 = get_binned_stats(Z20, GZ20, bins)
+
+fig, ax = plt.subplots(1, 1, figsize=(5, 5), dpi=100) 
+ax.plot(stats1['bin_edges'], stats1['mean'], '.-', label='t1')
+ax.plot(stats2['bin_edges'], stats2['mean'], '.-', label='t2')
+ax.fill_between(stats1['bin_edges'], stats1['mean']-stats1['std']/np.sqrt(stats1['count']), stats1['mean']+stats1['std']/np.sqrt(stats1['count']), alpha=.2)
+ax.fill_between(stats2['bin_edges'], stats2['mean']-stats2['std']/np.sqrt(stats2['count']), stats2['mean']+stats2['std']/np.sqrt(stats2['count']), alpha=.2)
+
+ax.set(xlabel='Interneuron input (normalized)', ylabel='Interneuron output (normalized)', ylim=(.3, .6))
+ax.legend()
+
+sns.despine()
+fig.tight_layout()
+
+#%%
+
+n_neurons = Z10.shape[0]
+slopes1 = np.zeros(n_neurons)
+slopes2 = np.zeros(n_neurons)
+for i in range(n_neurons):
+    slopes1[i] = sp.stats.siegelslopes(GZ10[i], Z10[i])[0]
+    slopes2[i] = sp.stats.siegelslopes(GZ20[i], Z20[i])[0]
+
+
+fig, ax = plt.subplots(1, 1, figsize=(5, 5), dpi=100)
+ax.plot(Z10.var(-1), slopes2-slopes1,'.k', alpha=.5, label='Interneurons')
+# axlims = (-2, 2)
+# ax.plot(axlims, axlims, 'k--', label='x=y')
+# ax.axis('square')
+ax.set(xlabel='var t1', ylabel='Slope t2 - slope t1')#, xlim=axlims, ylim=axlims)
+ax.legend()
+sns.despine()
+fig.tight_layout()
+
+sp.stats.spearmanr(Z10.var(-1), slopes2-slopes1)
+
+
+#%%
 
 def plot_windowed_responses(cells="MC", cmap='mako'):
     windows_trials = [(1, 1), (1, 2), (1, 0), (2, 1), (2, 2), (2, 0)]
@@ -339,7 +427,6 @@ plot_time_bin_covs(data, 'IN', correlation=True, cmap='viridis')
 
 
 #%%
-
 # make response matrices that concatenate each time step and trial and odor
 
 def get_response_matrices(data, cells="MC", trials=(1, 2)):
@@ -452,50 +539,16 @@ GZ1, GZ2 = get_response_matrices(data, cells="IN", trials=(1, 2))
 
 #%%
 def logvar(X, axis=1, eps=1E-6):
-    return (X.var(axis=1) + eps)
+    return (X.var(axis=axis) + eps)
 
-with sns.plotting_context('paper'):
-    Z1 = Wf.T @ Y1
-    Z2 = Wf.T @ Y2
-    Z1 = GZ1
-    Z2 = GZ2
-
-    # lims = (-6, 0)
-    lims = (0, .3)
-
-    eps = 1E-6
-    fig, ax = plt.subplots(1, 2, figsize=(10, 5), dpi=200)
-    ax[0].plot(logvar(Z1), logvar(Z2), '.k', label='Trial 1&2')
-    ax[0].plot(lims, lims, 'k--')
-    ax[0].set(xlabel='Time bin 1 Z variance', ylabel='Time bin 2 Z variance', yscale='linear', xscale='linear',
-    xlim=lims, ylim=lims,
-    )
-
-    ax[1].hist(logvar(Z1), bins=50, alpha=0.5, density=True)
-    ax[1].hist(logvar(Z2), bins=50, alpha=0.5, density=True)
-    sns.kdeplot(logvar(Z1), ax=ax[1], color='C0', lw=2, label='Time bin 1')
-    sns.kdeplot(logvar(Z2), ax=ax[1], color='C1', lw=2, label='Time bin 2')
-    ax[1].set(xlabel='Z variance', ylabel='Density', yscale='linear', xscale='linear', xlim=lims)
-    ax[1].legend()
-
-    iqr1 = scipy.stats.iqr(logvar(Z1))
-    iqr2 = scipy.stats.iqr(logvar(Z2))
-
-    # add text
-    ax[1].text(.75, 0.8, f'IQR: {iqr1:.2f}', transform=ax[1].transAxes, va='top', color="C0")
-    ax[1].text(.75, 0.75, f'IQR: {iqr2:.2f}', transform=ax[1].transAxes, va='top', color="C1")
-
-    sns.despine()
-    fig.tight_layout
-
-def permutation_test_iqr_logvar(X, Y, n_perm=1000, seed=0):
+def permutation_test_iqr_logvar(X, Y, n_perm=1000, seed=0, ax=None):
     rng = np.random.default_rng(seed)
     logvar1 = logvar(X)
     logvar2 = logvar(Y)
 
     iqr1 = scipy.stats.iqr(logvar1)
     iqr2 = scipy.stats.iqr(logvar2)
-    diff = iqr1 - iqr2
+    diff = iqr2 - iqr1
 
     iqr_diffs = []
 
@@ -510,9 +563,10 @@ def permutation_test_iqr_logvar(X, Y, n_perm=1000, seed=0):
             )
     
     pval = np.sum(np.abs(iqr_diffs) > np.abs(diff)) / n_perm
-    pval = 1 - np.sum(diff>iqr_diffs) / n_perm
-    _, ax = plt.subplots(1, 1, figsize=(3,3), dpi=100)
-    ax.hist(iqr_diffs, bins=50, alpha=0.5, label='Null distribution')
+    pval = np.sum(diff>iqr_diffs) / n_perm
+    if ax is None:
+        _, ax = plt.subplots(1, 1, figsize=(3,3), dpi=100)
+    ax.hist(iqr_diffs, bins=50, alpha=0.5, label='Null distribution', density=True)
     ax.axvline(diff, color='r', lw=2, label='Observed')
     ax.set(xlabel='IQR difference', ylabel='Count')
     # put pval in text
@@ -523,21 +577,66 @@ def permutation_test_iqr_logvar(X, Y, n_perm=1000, seed=0):
 
     return ax 
 
-ax_inputs = permutation_test_iqr_logvar(Z1, Z2, n_perm=10_000, seed=0)
+
+with sns.plotting_context('paper'):
+    Z1 = Wf.T @ Y1
+    Z2 = Wf.T @ Y2
+    # Z1 = GZ1
+    # Z2 = GZ2
+
+    lims = (0, .3)
+
+    eps = 1E-6
+    fig, ax = plt.subplots(1, 3, figsize=(15, 5), dpi=200)
+    ax[0].plot(logvar(Z1), logvar(Z2), '.k', label='Trial 1&2')
+    ax[0].plot(lims, lims, 'k--')
+    ax[0].set(xlabel='Time bin 1 Variance', ylabel='Time bin 2 Variance', yscale='linear', xscale='linear',
+    xlim=lims, ylim=lims,
+    )
+
+    ax[1].hist(logvar(Z1), bins=50, alpha=0.5, density=True)
+    ax[1].hist(logvar(Z2), bins=50, alpha=0.5, density=True)
+    sns.kdeplot(logvar(Z1), ax=ax[1], color='C0', lw=2, label='Time bin 1')
+    sns.kdeplot(logvar(Z2), ax=ax[1], color='C1', lw=2, label='Time bin 2')
+    ax[1].set(xlabel='Variance', ylabel='Density', yscale='linear', xscale='linear', xlim=lims)
+    ax[1].legend()
+
+    iqr1 = scipy.stats.iqr(logvar(Z1))
+    iqr2 = scipy.stats.iqr(logvar(Z2))
+
+    # add text
+    ax[1].text(.75, 0.8, f'IQR: {iqr1:.2f}', transform=ax[1].transAxes, va='top', color="C0")
+    ax[1].text(.75, 0.75, f'IQR: {iqr2:.2f}', transform=ax[1].transAxes, va='top', color="C1")
+
+    sns.despine()
+    fig.tight_layout
+
+permutation_test_iqr_logvar(Z1, Z2, n_perm=10_000, seed=0, ax=ax[2])
 ax_outputs = permutation_test_iqr_logvar(GZ1, GZ2, n_perm=10_000, seed=0)
 
-ax_inputs.set(title=r'Input variance: IQR time 2 - IQR time 1')
+ax[2].set(title=r'Input variance: IQR time 2 - IQR time 1')
 ax_outputs.set(title=r'Output variance: IQR time 2 - IQR time 1')
 
 #%%
 fig, ax = plt.subplots(1, 1)
-tt = logvar(GZ2)-logvar(GZ1)
-ax.hist(tt, bins=50, alpha=0.5, color='k', density=True)
-sns.kdeplot(tt, ax=ax, color='k', lw=2, label='Time bin 1')
+delta_var = logvar(GZ2)-logvar(GZ1)
+
+ax.hist(delta_var, bins=50, alpha=0.5, color='k', density=True)
+sns.kdeplot(delta_var, ax=ax, color='k', lw=2, label='Time bin 1')
 ax.set(xlabel='Output var time 2 - Output var time 1', ylabel='Density', yscale='linear', xscale='linear')
 
-#%%
-np.linalg.norm(Wf, axis=0)
+fig, ax = plt.subplots(1, 1)
+ax.scatter(logvar(Z1, axis=1), delta_var, alpha=0.5, color='k', label='Interneuron')
+lims = (-.05, .2)
+ax.plot(lims, lims, 'k--')
+ax.axis('square')
+ax.set(xlabel='Input var time 1', ylabel='Output var time 2 - Output var time 1',yscale='linear', xscale='linear'
+)
+ax.legend()
+fig.tight_layout()
+sns.despine()
+
+sp.stats.spearmanr(logvar(Z1), delta_var)
 
 #%%
 def moment_k_cycles(Y: np.ndarray, k: int) -> np.ndarray:

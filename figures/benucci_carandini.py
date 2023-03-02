@@ -150,91 +150,6 @@ def normalize_fr(X: npt.NDArray[np.float64], Z: npt.NDArray[np.float64] = None) 
     Y /= z_max  # scale by amplitude of each unit
     return Y
 
-#%%
-
-def plot_covariances(
-    resps_data: npt.NDArray[np.float64],
-    resps_model: npt.NDArray[np.float64],
-    prob_data: npt.NDArray[np.float64],
-    prob_model: npt.NDArray[np.float64],
-):
-
-    all_tc_unadapted, all_tc_adapted = resps_data[..., 0], resps_data[..., 1]
-    tc_model, tc_model_adapt = resps_model[..., 0], resps_model[..., 1]
-
-    mean_data = all_tc_unadapted.mean(-1)
-    mean_data_adapt = all_tc_adapted.mean(-1)
-
-    tc_model = tc_model.mean(-1)
-    tc_model_adapt = tc_model_adapt.mean(-1)
-
-    # fmt: off
-    # covariances
-    with sns.plotting_context("paper", font_scale=1.):
-        fig, ax = plt.subplots(
-            2, 3, sharex="all", sharey="all", figsize=(8, 5),  # dpi=300
-        )
-        cbar = False
-        cbar_ax = fig.add_axes([0.92, 0.1, 0.02, 0.8])
-        clims0 = (-1, 1.0)
-        cmap = "icefire"
-        # shared params across all heatmaps
-        kwargs = {
-            "cmap": cmap,
-            "vmin": clims0[0],
-            "vmax": clims0[1],
-            "square": True,
-            "cbar": cbar,
-        }
-
-        # data
-        sns.heatmap(
-            corr_matrix(mean_data, None, var=np.diag(np.cov(mean_data))),
-            ax=ax[0, 0], **kwargs)
-
-        sns.heatmap(
-            corr_matrix(mean_data, prob_data, var=np.diag(np.cov(mean_data))),
-            ax=ax[0, 1], **kwargs)
-
-        sns.heatmap(
-            corr_matrix(mean_data_adapt, p=prob_data, var=np.diag(np.cov(mean_data))),
-            ax=ax[0, 2], **kwargs,
-            xticklabels=[-90] + 5 * [""] + [0] + 5 * [""] + [90],
-            yticklabels=[-90] + 5 * [""] + [0] + 5 * [""] + [90])
-
-        # model
-        sns.heatmap(
-            corr_matrix(tc_model, None, var=np.diag(np.cov(tc_model))),
-            ax=ax[1, 0], **kwargs,)
-
-        sns.heatmap(
-            corr_matrix(tc_model, prob_model, var=np.diag(np.cov(tc_model))),
-            ax=ax[1, 1], **kwargs,)
-
-        kwargs.update({"cbar": True})
-        sns.heatmap(
-            corr_matrix(
-                tc_model_adapt, p=prob_model, var=np.diag(np.cov(tc_model))
-            ),
-            ax=ax[1, 2],
-            **kwargs,
-            xticklabels=[-90] + 5 * [""] + [0] + 5 * [""] + [90],
-            yticklabels=[-90] + 5 * [""] + [0] + 5 * [""] + [90],
-            cbar_ax=cbar_ax,
-            cbar_kws={
-                "orientation": "vertical",
-                "ticks": (-1, 0, 1),
-                "label": "Normalized covariance",
-            },
-        )
-        ax[0, 0].set(ylabel="Data \n Preferred ori (deg)", title="Uniform")
-        ax[1, 0].set(ylabel="Model \n Preferred ori (deg)", xlabel="Preferred ori (deg)")
-        ax[0, 1].set(title="Biased - No adapt")
-        ax[0, 2].set(title="Biased - Adapt")
-        sns.despine(fig)
-    # fmt: on
-    return 
-
 # %%
 def process_responses(subset, normalize_data=True):
 
@@ -258,31 +173,64 @@ def process_responses(subset, normalize_data=True):
     return resps_data, prob21, all_probs
 
 resps_data, prob21, all_probs = process_responses(subset="all")
-oris_stims_deg = np.rad2deg(oris_stims)
-oris_units_deg = np.rad2deg(oris_units)
 
-# n_inputs = 511
-# ori_inputs = get_oris(n_inputs)
-# ori_inputs_deg = np.rad2deg(ori_inputs) - 90.0
-# idx_inputs = get_idx(ori_inputs_deg, oris_stims_deg)
-# idx_units = get_idx(ori_prefs_deg, oris_units_deg)
-# prob21_model = prob_s[idx_inputs, 0]
-# prob21_model /= prob21_model.sum()
 prob0 = np.ones_like(prob21) / len(prob21)
 
 all_tc_unadapted, all_tc_adapted = resps_data[..., 0], resps_data[..., 1]
 
 X0 = all_tc_unadapted.mean(-1)
 X1 = all_tc_adapted.mean(-1)
-fig, ax = plt.subplots(1, 3, figsize=(15, 5))
 
-def heatmap(X, prob, ax, **kwargs):
+def heatmap(X, X0, prob, ax, **kwargs):
     C = cov(X, prob)
+    # C = corr_matrix(X, prob, var=np.diag(np.cov(X0)))
     vmax = np.abs(C).max()
-    sns.heatmap(C, ax=ax, vmin=-vmax, vmax=vmax, cmap="icefire", **kwargs)
+    vmax = .3
+    vmin = -0.05
+    # vmin = -vmax
+    sns.heatmap(C, ax=ax, vmin=vmin, vmax=vmax, cmap="rocket", **kwargs)
 
-heatmap(X0, prob0, ax[0], square=True, cbar=False)
-heatmap(X0, prob21, ax[1], square=True, cbar=False)
-heatmap(X1, prob21, ax[2], square=True, cbar=False)
+with sns.plotting_context('paper', font_scale=1.5):
+    fig, ax = plt.subplots(1, 4, figsize=(15, 5), sharex='all', sharey='all', dpi=600)
+
+    cbar = False
+    heatmap(X0, X0, prob0, ax[0], square=True, cbar=cbar)
+    heatmap(X0, X0, prob21, ax[1], square=True, cbar=cbar)
+    heatmap(X1, X0, prob21, ax[2], square=True, cbar=cbar)
+    heatmap(X0, X0, prob0, ax[3], square=True, cbar=cbar)
+
+    ax[0].set(title='Uniform', 
+    xticks=[0.5, 6.5, 12.5], yticks=[0.5, 6.5, 12.5],
+    xticklabels=[-90, 0, 90], yticklabels=[-90, 0, 90],
+    xlabel='Neuron\nPreferred orientation (deg)', ylabel='Neuron\nPreferred orientation (deg)')
+    ax[1].set(title='Biased without adaptation')
+    ax[2].set(title='Biased with adaptation')
+    ax[3].set(title='Model')
+
+    fig.tight_layout()
+
+for i in range(4):
+    ax[i].set_xticklabels(ax[i].get_xticklabels(), rotation=0)
+
+    
 
 # %%
+
+bins = np.linspace(-90, 90, 13)
+p13 = np.ones_like(bins)
+p13[len(bins)//2] = 4
+p13 = p13 / p13.sum()
+
+with sns.plotting_context('paper', font_scale=1.8):
+    fig, ax = plt.subplots(1, 1, figsize=(5, 5), dpi=600)
+    # ax.bar(bins, prob21, color='k', width=180/21)
+    ax.bar(bins, np.ones(bins.shape)/len(bins), color='darkgray', width=180/len(bins) + .5, alpha=1, label='Uniform')
+    ax.bar(bins, p13, color='k', width=180/len(bins)-4, alpha=1, label='Biased')
+    ax.set(
+        xlabel='Stimulus orientation (deg)', ylabel='Probability',
+        xticks=(-90, 0, 90),
+        yticklabels=[],
+        xlim=(-100, 100), ylim=(0, 0.3),
+    )
+    ax.legend()
+    sns.despine(top=True, right=True)
