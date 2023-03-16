@@ -172,7 +172,7 @@ def process_responses(subset, normalize_data=True):
 
     return resps_data, prob21, all_probs
 
-resps_data, prob21, all_probs = process_responses(subset="all")
+resps_data, prob21, all_probs = process_responses(subset="low")
 
 prob0 = np.ones_like(prob21) / len(prob21)
 
