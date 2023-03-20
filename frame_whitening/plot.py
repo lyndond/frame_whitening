@@ -29,7 +29,7 @@ def plot_frame2d(
 
 
 def plot_ellipse(
-    C: npt.NDArray[np.float64], n_pts: int = 20, ax=None, stdev: float =2., **kwargs
+    C: npt.NDArray[np.float64], n_pts: int = 100, ax=None, stdev: float =2., **kwargs
 ) -> None:
     """Plots 2D 1-stdev ellipse according to covariance matrix C"""
     assert C.shape == (2, 2)

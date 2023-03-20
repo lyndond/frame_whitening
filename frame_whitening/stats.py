@@ -1,6 +1,7 @@
+from typing import Tuple, Optional
+
 import numpy as np
 import numpy.typing as npt
-from typing import Tuple
 from scipy.linalg import fractional_matrix_power
 
 
@@ -33,8 +34,10 @@ def psd_sqrt(C: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
 
 
 def sample_x(
-    Lxx: npt.NDArray[np.float64], n_samples: int = 1
+    Lxx: npt.NDArray[np.float64], n_samples: int = 1, rng: Optional[np.random.Generator] = None
 ) -> npt.NDArray[np.float64]:
     """Takes cholesky L to colour n_samples of white noise"""
+    if rng is None:
+        rng = np.random.default_rng()
     n = Lxx.shape[0]
-    return Lxx @ np.random.randn(n, n_samples)
+    return Lxx @ rng.standard_normal((n, n_samples))

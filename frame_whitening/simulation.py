@@ -6,8 +6,6 @@ import numpy.typing as npt
 import scipy as sp
 from tqdm import tqdm
 
-from frame_whitening import stats
-
 
 def adapt_covariance(
     Cxx_list: Sequence[npt.NDArray[np.float64]],
@@ -20,10 +18,11 @@ def adapt_covariance(
     clamp: bool = False,
     alpha: float = 1.,
     save_every: int = 1,
-    seed: Optional[float] = None,
+    seed: Optional[int] = None,
     verbose: bool = True,
     break_on_convergence: bool = True,
     break_on_divergence: bool = True,
+    error_type: str = "fro",
 ) -> Tuple[
     npt.NDArray[np.float64],
     npt.NDArray[np.float64],
@@ -60,8 +59,7 @@ def adapt_covariance(
     variances : (n_batch * n_contexts, K) variances at each step.
     """
 
-    if seed is not None:
-        np.random.seed(seed)
+    rng = np.random.default_rng() if seed is None else np.random.default_rng(seed)
     assert alpha >= 0., "alpha must be non-negative"
 
     # initialize random set of gains g
@@ -92,16 +90,19 @@ def adapt_covariance(
             M = np.linalg.inv(alpha*Ixx + WGW)
 
             if online: # run simulation with minibatches
+
                 # draw a sample of x
-                x = stats.sample_x(Lxx, batch_size)
+                x = Lxx @ rng.standard_normal((N, batch_size))
                 y = np.linalg.inv(Ixx + WGW) @ x
                 z = W.T @ y
                 variances = z**2
-                dg = z**2 - 1
-                g = g + lr_g * np.mean(dg, -1)  # gradient ascent
-            else:
-                # compute diag(W.T@Cyy@W) efficiently
+                dg = variances - 1
+                g = g + lr_g * np.mean(dg, -1)  # stochastic gradient ascent
+
+            else:  # offline mode
                 Cyy = M @ Cxx @ M.T
+
+                # compute diag(W.T@Cyy@W) efficiently
                 tmp = Cyy @ W
                 variances = np.array([w @ t for w, t in zip(W.T, tmp.T)])
                 dg = variances - 1
@@ -110,7 +111,8 @@ def adapt_covariance(
             # project g to be positive
             g = np.clip(g, 0, np.inf) if clamp else g
             if step % save_every == 0:
-                error = np.linalg.norm(M @ Cxx @ M.T - Ixx) ** 2 / N**2
+                # error = np.linalg.norm(M @ Cxx @ M.T - Ixx) ** 2 / N**2
+                error = compute_error(M, Cxx, clamp, error_type)
                 errors.append(error)
                 if np.allclose(g_all[-1], g) and break_on_convergence:
                     if verbose:
@@ -128,6 +130,33 @@ def adapt_covariance(
     g_last = np.stack(g_last, 0)
     g_all = np.stack(g_all, 0)
     return g_last, g_all, errors, variances  # type: ignore
+
+
+def compute_error(
+        M: npt.NDArray[np.float64], 
+        Cxx: npt.NDArray[np.float64], 
+        clamp: bool, 
+        error_type: str = 'fro'
+    ) -> float:
+    assert error_type in ['fro', 'spectral', 'operator']
+    Cyy = M @ Cxx @ M.T
+    N = Cxx.shape[0]
+
+    if error_type == 'fro':
+        err_diag = np.diag(Cyy) - 1
+        err_off_diag = Cyy[np.triu_indices_from(Cyy, k=1)] 
+        error = 1/(N**2) * (np.sum(err_diag ** 2) + 2 * np.sum(err_off_diag ** 2))
+    elif error_type == 'spectral':
+        eigvals = np.linalg.eigvalsh(Cyy)
+        diff = eigvals - 1
+        diff = np.clip(diff, 0, np.inf) if clamp else diff
+        error = 1/N * np.sum(diff ** 2)
+    else:  # operator norm
+        eigvals = np.linalg.eigvalsh(Cyy)
+        opnorm = np.max(eigvals)
+        error = opnorm-1
+        
+    return error
 
 
 def get_g_opt(
