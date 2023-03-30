@@ -154,7 +154,7 @@ def compute_error(
     else:  # operator norm
         eigvals = np.linalg.eigvalsh(Cyy)
         opnorm = np.max(eigvals)
-        error = opnorm-1
+        error = opnorm - 1
         
     return error
 
