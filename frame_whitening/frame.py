@@ -224,7 +224,9 @@ def get_grassmannian(
     rng: Optional[np.random.Generator] = None,
     method: str = "highs",
 ) -> Tuple[npt.NDArray[np.float64], List[float]]:
-    """Generates an m x n Grassmannian frame."""
+    """Generates an m x n Grassmannian frame.
+    
+    """
     if rng is None:
         rng = np.random.default_rng()
 
@@ -255,3 +257,85 @@ def get_grassmannian(
             break
         obj_coh.append(tmp1)
     return F, obj_coh
+
+
+def design_grassmannian(
+        n: int, 
+        m: int, 
+        niter: int=1000, 
+        fract_shrink: float=.8, 
+        shrink_fact: float=.95, 
+        expand: bool=False, 
+        rng=None
+        ):
+    """Sample a tight frame with minimal mutual coherence, ie. the angle
+    between any pair of column is the same, and the smallest it can be.
+
+    Approximate iterative algorithm to sample grassmannian mtx (tightest frame,
+    smallest possible mutual coherence).
+
+    Parameters
+    ----------
+    n: dimension of the ambiant space
+    m: number of vectors
+    niter: number of iterations
+    fract_shrink:
+    shrink_fact:
+    rng: random number generator
+
+    Returns
+    -------
+    A : tight frame of shape [n, m], with normalized columns
+    G : Gram matrix
+        G = A.T @ A
+        abs(Gij) = sqrt((m-n)/n(m-1))
+
+    Notes
+    -----
+    only feasible for some (n, m pairs)
+    """
+    if rng is None:
+        rng = np.random.default_rng()
+    assert m>n
+
+    A = rng.standard_normal((n, m))
+
+
+    # normalize columns
+    A = A @ (np.diag(np.sqrt(np.sum(A**2, axis=0))**(-1)))
+    G = A.T @ A
+
+    resid = np.zeros((niter, 3))
+    for i in range(niter):
+        # 1- shrink high inner products
+        gg = np.sort(np.abs(G).flatten())
+
+        # TODO maybe do a better job at removing the diagonal that is
+        # 'exactely' one?
+        idx, idy = np.where((np.abs(G) > gg[int(fract_shrink*(m**2-m))])
+                            & (np.abs(G - 1) > 1e-6))
+        G[idx, idy] *= shrink_fact
+
+        # 1b- expand near 0 products
+        if expand:
+            idx, idy = np.where((np.abs(G) <
+                                gg[int((1-fract_shrink)*(m**2-m))]))
+            G[idx, idy] /= shrink_fact
+
+        # 2- reduce rank back to n
+        U, s, Vh = np.linalg.svd(G)
+        s[n:] *= 0
+        G = U @ np.diag(s) @ Vh
+
+        # 3- normalize cols
+        G = np.diag(1/np.sqrt(np.diag(G))) @ G @ np.diag(1/np.sqrt(np.diag(G)))
+
+        # status
+        # gg = np.sort(np.abs(G).flatten())
+        # idx, idy = np.where((np.abs(G) > gg[int(fract_shrink*(m**2-m))])
+        #                     & (np.abs(G - 1) > 1e-6))
+
+    U, s, Vh = np.linalg.svd(G)
+    A = np.diag(np.sqrt(s[:n])) @ U[:, :n].T
+
+    return A, G
