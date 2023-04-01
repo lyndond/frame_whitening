@@ -150,7 +150,7 @@ def compute_error(
         eigvals = np.linalg.eigvalsh(Cyy)
         diff = eigvals - 1
         diff = np.clip(diff, 0, np.inf) if clamp else diff
-        error = 1/N * np.sum(diff ** 2)
+        error = 1/N * np.sum(diff**2)
     else:  # operator norm
         eigvals = np.linalg.eigvalsh(Cyy)
         opnorm = np.max(eigvals)
