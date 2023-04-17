@@ -27,6 +27,12 @@ def randcovn(
     return C, L
 
 
+def normalize_cov(C: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
+    sigma = np.sqrt(np.diag(C))
+    C_hat = C/np.outer(sigma, sigma)
+    return C_hat
+
+
 def psd_sqrt(C: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """Computes PSD square root"""
     Csqrt = fractional_matrix_power(C, 0.5)
