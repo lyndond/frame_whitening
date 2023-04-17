@@ -2,7 +2,6 @@ from typing import Tuple, Optional
 
 import numpy as np
 import numpy.typing as npt
-from scipy.linalg import fractional_matrix_power
 
 
 def randcov2(
@@ -35,7 +34,10 @@ def normalize_cov(C: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
 
 def psd_sqrt(C: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
     """Computes PSD square root"""
-    Csqrt = fractional_matrix_power(C, 0.5)
+    # Csqrt = fractional_matrix_power(C, 0.5)
+    d, V = np.linalg.eigh(C)
+    D_sqrt = np.diag(np.sqrt(np.abs(d)))  # ensure positive eigenvals
+    Csqrt = V @ D_sqrt @ V.T
     return Csqrt
 
 
