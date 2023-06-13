@@ -426,6 +426,9 @@ plot_time_bin_covs(data, 'MC', correlation=True, cmap='viridis')
 plot_time_bin_covs(data, 'IN', correlation=True, cmap='viridis')
 
 
+
+tmp(data, 'MC')
+
 #%%
 # make response matrices that concatenate each time step and trial and odor
 
@@ -539,7 +542,7 @@ GZ1, GZ2 = get_response_matrices(data, cells="IN", trials=(1, 2))
 
 #%%
 def logvar(X, axis=1, eps=1E-6):
-    return (X.var(axis=axis) + eps)
+    return np.log(X.var(axis=axis) + eps)
 
 def permutation_test_iqr_logvar(X, Y, n_perm=1000, seed=0, ax=None):
     rng = np.random.default_rng(seed)
@@ -584,7 +587,7 @@ with sns.plotting_context('paper'):
     # Z1 = GZ1
     # Z2 = GZ2
 
-    lims = (0, .3)
+    lims = (-6, .3)
 
     eps = 1E-6
     fig, ax = plt.subplots(1, 3, figsize=(15, 5), dpi=200)
@@ -598,7 +601,7 @@ with sns.plotting_context('paper'):
     ax[1].hist(logvar(Z2), bins=50, alpha=0.5, density=True)
     sns.kdeplot(logvar(Z1), ax=ax[1], color='C0', lw=2, label='Time bin 1')
     sns.kdeplot(logvar(Z2), ax=ax[1], color='C1', lw=2, label='Time bin 2')
-    ax[1].set(xlabel='Variance', ylabel='Density', yscale='linear', xscale='linear', xlim=lims)
+    ax[1].set(xlabel='Log-variance', ylabel='Density', yscale='linear', xscale='linear', xlim=lims)
     ax[1].legend()
 
     iqr1 = scipy.stats.iqr(logvar(Z1))
@@ -695,6 +698,8 @@ def permutation_participation_ratio(data, cells, n_perms=1000):
 
     return dp0, np.array(dp)
 
+#%%
+# scatter plot
 
 n_perms = 5000
 dp0, dp = permutation_participation_ratio(data, cells="MC", n_perms=n_perms)
@@ -716,3 +721,270 @@ with sns.plotting_context('talk'):
 
 # solve for g
 # Wb @ diag(g) @ Wf.T @ Y2 = Y2 - Y1
+
+
+#%%  NEURIPS??
+import collections
+from typing import List
+
+def normalize_frame(W, axis=0):
+    """Normalize the columns of W to unit length"""
+    W0 = W / np.linalg.norm(W, axis=axis, keepdims=True)
+    return W0
+
+def psd_sqrt(C):
+    """Computes PSD square root"""
+    d, V = np.linalg.eigh(C)
+    D_sqrt = np.diag(np.sqrt(np.abs(d)))  # ensure positive eigenvals
+    Csqrt = V @ D_sqrt @ V.T
+    return Csqrt
+
+def psd_square(C):
+    """Computes PSD square"""
+    C_squared = C.T @ C
+    return C_squared
+
+def compute_error(C, Ctarget, ord=2):
+    return np.linalg.norm(C-Ctarget, ord=ord)
+
+def get_g_opt(
+    W,
+    Css,
+):
+    """Compute optimal G."""
+    N, K = W.shape
+    # assert K == N * (N + 1) // 2, "W must have K = N(N+1)/2 columns."
+    In = np.eye(N)
+    gram_sq_inv = np.linalg.inv((W.T @ W) ** 2)
+    Css_12 = psd_sqrt(Css)
+    g_opt = gram_sq_inv @ np.diag(W.T @ (Css_12 - In) @ W)
+    return g_opt
+
+def context_adaptation_experiment(
+        Css_list: List[np.ndarray], 
+        N: int, 
+        K: int, 
+        eta_w: float, 
+        eta_g: float,
+        batch_size: int,
+        n_context_samples: int, 
+        n_samples: int, 
+        g0: np.ndarray,
+        W0: np.ndarray, 
+        alpha=1.,
+        online=True,
+        nonneg=False,
+        lmbda=0.1,
+        normalize_w=False,
+        seed=None, 
+        error_ord=2, 
+        verbose: bool = True,
+        ):
+    rng = np.random.default_rng(seed)
+    
+    # make sources
+    Css12_list = [psd_sqrt(Css) for Css in Css_list]
+    n_contexts = len(Css_list)
+
+    N, K = W0.shape
+    W = W0.copy()
+
+    In = np.eye(N)
+
+    results = collections.defaultdict(list)
+
+    T = n_contexts if n_context_samples == 0 else n_context_samples
+    iterator = tqdm(range(T)) if verbose else range(T)
+    g = g0.copy()
+    # prepend and append the same 10 random contexts for plotting later
+    pre_post = rng.integers(0, n_contexts, (10))
+    contexts = np.concatenate([pre_post, rng.integers(0, n_contexts, (T-20, ) ), pre_post])
+    for t in iterator:
+        ctx = contexts[t]
+        Css, Css12 = Css_list[ctx],  Css12_list[ctx]
+
+        for _ in range(n_samples):
+
+            if online:
+                # draw sample and compute primary neuron steady-state
+                s = Css12 @ rng.standard_normal((N, batch_size))  # sample data
+                WGWT = (W * g[None, :]) @ W.T  # more efficient way of doing W @ np.diag(g) @ W.T
+                M = np.linalg.solve(alpha*In + WGWT, In)  # more stable than inv
+                r =  M @ s  # primary neuron steady-state
+
+                # compute interneuron input/output and update g
+                z = W.T @ r  # interneuron steady-state input
+                n = g[:, None] * z   # interneuron steady-state output
+                w_norm = np.linalg.norm(W, axis=0)**2  # weight norm
+                dg = z**2 - w_norm[:, None]
+
+                if not nonneg:
+                    g = g + eta_g * np.mean(dg, -1)
+                else:
+                    if lmbda > 0.:
+                        dg = dg - lmbda * np.sign(g[:, None])
+                    g = np.clip(g + eta_g * np.mean(dg, -1), 0, np.inf)
+
+                # update W
+                rnT = r @ n.T / batch_size
+                dW = rnT - W * g[None, :]
+                W = W + eta_w * dW
+                Crr = M @ Css @ M.T
+
+            else:
+                WTW = W.T @ W
+                g = np.linalg.solve(WTW**2, np.diag(W.T @ Css12 @ W - WTW))
+                WG = W * g[None, :]
+                WGWT = WG @ W.T  # more efficient way of doing W @ np.diag(g) @ W.T
+                M = np.linalg.solve(alpha*In + WGWT, In)  # more stable than inv
+                Crr = M @ Css @ M.T
+
+                # update W
+                dg = 0.
+                dW = (Crr @ WG) - WG
+                W = W + eta_w * dW
+
+            W = normalize_frame(W) if normalize_w else W
+            results['g'].append(g)
+            results['g_norm'].append(np.linalg.norm(g))
+            results['W_norm'].append(np.linalg.norm(W))
+            results['dg_norm'].append(np.linalg.norm(dg))
+            results['dW_norm'].append(np.linalg.norm(dW))
+            results['error'].append(compute_error(Crr, In, error_ord))
+        # end of sample loop
+        # save last g
+        results['g_end'].append(g)
+
+    results.update({
+        'W0': W0,
+        'W': W,
+        'N': N,
+        'K': K,
+        'eta_w': eta_w,
+        'n_samples': n_samples,
+        'g0': g0,
+        'W0': W0,
+        'seed': seed,
+    })
+    return results
+  
+
+
+# seed = 42069
+# rng = np.random.default_rng(seed)
+
+
+
+
+# alpha = 1.
+# # eta_w = 5E-3
+# eta_w = 5E-3
+# eta_g = 5E-2  # works with 1E-2
+# batch_size = 128  # batched stochastic gradient steps
+# n_context_samples = 1024  # number of contexts seen
+# n_samples = 128 # number of samples per context
+# error_ord = 'f'  # ||Crr - In||_{error_ord}  (matrix norm)
+# verbose = True
+# online = True
+# nonneg = True
+# lmbda = 0.3
+# normalize_w = True  # normalize W after each update
+
+# N = patch_h * patch_w
+# # K = 3*N
+# K = 20
+# W0 = normalize_frame(rng.standard_normal((N, K)))
+
+# Css_list = norm_filtered.copy()
+# # Css_list /= 2
+# # optimal g for each context in Css_list
+# g_opts = np.array([get_g_opt(W0, Css) for Css in Css_list])
+# g0 = np.median(g_opts, axis=0)  # init g to median of all optimal g's
+# g0 = np.ones(K)
+
+# g0 = rng.uniform(0, 3, (K, ))
+
+# with multiprocessing.Pool() as pool:
+    # n_lmbdas = 20
+    # lmbda_args = (lmbda for lmbda in np.linspace(0, 2, n_lmbdas))
+    # results_sparsity = list(tqdm(pool.imap(run_sparsity_experiment, lmbda_args), total=n_lmbdas))
+
+
+def spectral_normalize(C):
+    return C / np.linalg.norm(C, 2)
+
+def get_cov2(X):
+    X0 = X - X.mean(1, keepdims=True)
+    C1 = X0 @ X0.T / X.shape[1]
+    return C1
+
+
+def run_olfaction_experiment(lmbda):
+    verbose = False
+    return results
+
+def tmp(data):
+    Rz = get_windowed_responses(data, cells="IN")
+    R = get_windowed_responses(data, cells="MC")
+    spectral_radius = 10
+    N = R[(1, 0)].shape[0]
+    K = Rz[(1, 0)].shape[0]
+    print(K)
+
+    eps = 1E-1
+    # eps = 0. 
+    Eps = eps * np.eye(N)
+    C1 = get_cov2(R[(1, 0)]) + Eps
+    C2 = get_cov2(R[(2, 0)]) + Eps
+
+    rho = np.linalg.norm(C1, 2)
+    C1_hat = C1 / rho * spectral_radius
+    C2_hat = C2 / rho * spectral_radius
+
+    fig, ax = plt.subplots(1, 2, sharex='all', sharey='all', dpi=None)
+    ax[0].plot(np.linalg.eigvalsh(C1_hat))
+    ax[1].plot(np.linalg.eigvalsh(C2_hat))
+    print(np.linalg.cond(C1_hat))
+    print(np.linalg.cond(C2_hat))
+
+    Css_list = [C1]
+    alpha=1.
+    n_context_samples = 32
+    batch_size = 1
+    eta_w = 1E-5
+    eta_g = 1E-3
+    W0 = normalize_frame(np.array(Wf).astype(np.float64))
+    # g0 = np.ones(K)
+    g0 = rng.uniform(0, 2, (K, ))
+    seed = 42069
+    error_ord='f'
+    online = False
+    normalize_w = True
+    verbose=True
+    lmbda = 0.
+    nonneg = False
+
+    results = context_adaptation_experiment(
+        Css_list,
+        N,
+        K,
+        eta_w if online else 1E-2,  # OVERRIDE eta_w if offline (can be very fast)
+        eta_g,
+        batch_size,
+        n_context_samples,
+        n_samples if online else 1,  # OVERRIDE n_samples if offline
+        g0,
+        W0,
+        alpha,
+        online,
+        nonneg,
+        lmbda,
+        normalize_w,
+        seed,
+        error_ord,
+        verbose,
+    )
+    # plt.figure()
+    print(results['g'])
+
+tmp(data)
